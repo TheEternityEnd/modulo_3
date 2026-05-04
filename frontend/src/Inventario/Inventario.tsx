@@ -46,6 +46,7 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
   const [categoryFilter, setCategoryFilter] = useState('Todas las categorías');
   const [statusFilter, setStatusFilter] = useState('Todos los estados');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
@@ -53,6 +54,48 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
   const showToast = (message: string, type: 'success'|'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setFormData({
+      codigo_articulo: '',
+      nombre: '',
+      descripcion: '',
+      categoria: 'Silla de ruedas',
+      cantidad_total: 1,
+      cantidad_disponible: 1,
+      estado_fisico: 'Disponible'
+    });
+  };
+
+  const handleOpenNew = () => {
+    setEditingId(null);
+    setFormData({
+      codigo_articulo: '',
+      nombre: '',
+      descripcion: '',
+      categoria: 'Silla de ruedas',
+      cantidad_total: 1,
+      cantidad_disponible: 1,
+      estado_fisico: 'Disponible'
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleEditClick = (item: Articulo) => {
+    setEditingId(item.id_articulo || null);
+    setFormData({
+      codigo_articulo: item.codigo_articulo,
+      nombre: item.nombre,
+      descripcion: item.descripcion,
+      categoria: item.categoria,
+      cantidad_total: item.cantidad_total,
+      cantidad_disponible: item.cantidad_disponible,
+      estado_fisico: item.estado_fisico
+    });
+    setIsModalOpen(true);
   };
   
   const [inventoryData, setInventoryData] = useState<Articulo[]>([]);
@@ -101,26 +144,28 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
 
     setActionLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/inventario', {
-        method: 'POST',
+      const url = editingId 
+        ? `http://localhost:3000/inventario/${editingId}`
+        : 'http://localhost:3000/inventario';
+      const method = editingId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar');
       
-      setInventoryData(prev => [...prev, data.articulo]);
-      setIsModalOpen(false);
-      setFormData({
-        codigo_articulo: '',
-        nombre: '',
-        descripcion: '',
-        categoria: 'Silla de ruedas',
-        cantidad_total: 1,
-        cantidad_disponible: 1,
-        estado_fisico: 'Disponible'
-      });
-      showToast('Artículo guardado exitosamente', 'success');
+      if (editingId) {
+        setInventoryData(prev => prev.map(item => item.id_articulo === editingId ? data.articulo : item));
+        showToast('Artículo actualizado exitosamente', 'success');
+      } else {
+        setInventoryData(prev => [...prev, data.articulo]);
+        showToast('Artículo guardado exitosamente', 'success');
+      }
+      
+      handleCloseModal();
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Hubo un error al guardar el artículo', 'error');
@@ -255,7 +300,7 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
                 <span>Exportar CSV</span>
               </button>
               <button 
-                onClick={() => setIsModalOpen(true)}
+                onClick={handleOpenNew}
                 className="bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
               >
                 <Plus size={20} strokeWidth={2.5} />
@@ -350,7 +395,11 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
                             <button className="p-2 text-[#5ba4c7] hover:bg-[#5ba4c7]/10 rounded-xl transition-all hover:scale-110" title="Ver Historial">
                               <History size={18} />
                             </button>
-                            <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-all hover:scale-110" title="Editar">
+                            <button 
+                              className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-all hover:scale-110" 
+                              title="Editar"
+                              onClick={() => handleEditClick(item)}
+                            >
                               <Edit size={18} />
                             </button>
                             <button 
@@ -401,12 +450,12 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsModalOpen(false)}
+            onClick={handleCloseModal}
           ></div>
 
           <div className="relative bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-8 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-900">Agregar Nuevo Aparato</h3>
+              <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Editar Aparato' : 'Agregar Nuevo Aparato'}</h3>
             </div>
 
             <form className="p-8 space-y-6" onSubmit={handleSaveItem}>
@@ -494,7 +543,7 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
               <div className="flex items-center justify-end gap-4 pt-4">
                 <button 
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={handleCloseModal}
                   className="px-8 py-3.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-2xl transition-all"
                 >
                   Cancelar
@@ -505,7 +554,7 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
                   className="px-8 py-3.5 text-sm font-bold text-white bg-[#5ba4c7] hover:bg-[#4a8ba9] rounded-2xl shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98] disabled:opacity-70 flex items-center gap-2"
                 >
                   {actionLoading ? <Loader2 size={18} className="animate-spin" /> : null}
-                  <span>Guardar Aparato</span>
+                  <span>{editingId ? 'Actualizar Aparato' : 'Guardar Aparato'}</span>
                 </button>
               </div>
             </form>

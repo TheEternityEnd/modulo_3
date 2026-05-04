@@ -30,7 +30,7 @@ CREATE TABLE inventario (
     categoria VARCHAR(100),
     cantidad_total INTEGER NOT NULL DEFAULT 1,
     cantidad_disponible INTEGER NOT NULL DEFAULT 1,
-    estado_fisico VARCHAR(50) DEFAULT 'Bueno', -- Ej: Bueno, Regular, Dañado
+    estado_fisico VARCHAR(50) DEFAULT 'Disponible', 
     fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

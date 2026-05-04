@@ -149,7 +149,7 @@ app.put('/inventario/:id', async (req, res) => {
 app.delete('/inventario/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const resultado = await db.query('DELETE FROM inventario WHERE id_articulo = $1 RETURNING *', [id]);
+        const resultado = await db.query("UPDATE inventario SET estado_fisico = 'Baja' WHERE id_articulo = $1", [id]);
         if (resultado.rows.length === 0) {
             return res.status(404).json({ error: 'Artículo no encontrado' });
         }

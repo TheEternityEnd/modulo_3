@@ -425,6 +425,149 @@ app.post('/devoluciones', async (req, res) => {
     }
 });
 
+// ==========================================
+// RUTAS DE REPORTES
+// ==========================================
+
+// RESUMEN DE KPIs (GET /reportes/resumen)
+app.get('/reportes/resumen', async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+        
+        // Total de aparatos (suma de todas las cantidades totales)
+        const totalAparatosRes = await db.query('SELECT COALESCE(SUM(cantidad_total), 0) AS total FROM inventario');
+        
+        // Total de préstamos activos
+        let prestadosQuery = "SELECT COUNT(*) AS total FROM prestamos WHERE estado_prestamo = 'Activo'";
+        const prestadosValues = [];
+        if (fechaInicio && fechaFin) {
+            prestadosQuery += " AND fecha_prestamo >= $1 AND fecha_prestamo <= $2";
+            prestadosValues.push(fechaInicio, fechaFin);
+        }
+        const prestadosRes = await db.query(prestadosQuery, prestadosValues);
+        
+        // Devoluciones atrasadas (préstamos activos con fecha límite pasada)
+        let atrasadasQuery = "SELECT COUNT(*) AS total FROM prestamos WHERE estado_prestamo = 'Activo' AND fecha_limite_devolucion < CURRENT_DATE";
+        const atrasadasValues = [];
+        if (fechaInicio && fechaFin) {
+            atrasadasQuery += " AND fecha_prestamo >= $1 AND fecha_prestamo <= $2";
+            atrasadasValues.push(fechaInicio, fechaFin);
+        }
+        const atrasadasRes = await db.query(atrasadasQuery, atrasadasValues);
+        
+        // Aparatos en mantenimiento
+        const mantenimientoRes = await db.query("SELECT COALESCE(SUM(cantidad_total), 0) AS total FROM inventario WHERE estado_fisico = 'Mantenimiento' OR estado_fisico = 'Reparación'");
+
+        res.json({
+            total_aparatos: parseInt(totalAparatosRes.rows[0].total, 10),
+            total_prestados: parseInt(prestadosRes.rows[0].total, 10),
+            devoluciones_atrasadas: parseInt(atrasadasRes.rows[0].total, 10),
+            en_mantenimiento: parseInt(mantenimientoRes.rows[0].total, 10)
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener el resumen de reportes' });
+    }
+});
+
+// TOP 5 APARATOS MÁS SOLICITADOS (GET /reportes/top-aparatos)
+app.get('/reportes/top-aparatos', async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+        let query = `
+            SELECT i.nombre, COUNT(p.id_prestamo) AS total_prestamos
+            FROM prestamos p
+            JOIN inventario i ON p.id_articulo = i.id_articulo
+        `;
+        const values = [];
+        
+        if (fechaInicio && fechaFin) {
+            query += " WHERE p.fecha_prestamo >= $1 AND p.fecha_prestamo <= $2";
+            values.push(fechaInicio, fechaFin);
+        }
+        
+        query += `
+            GROUP BY i.id_articulo, i.nombre
+            ORDER BY total_prestamos DESC
+            LIMIT 5
+        `;
+        
+        const resultado = await db.query(query, values);
+        // Convertimos a número para asegurar el tipo de dato correcto
+        const datos = resultado.rows.map(row => ({
+            ...row,
+            total_prestamos: parseInt(row.total_prestamos, 10)
+        }));
+        res.json(datos);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener el top de aparatos' });
+    }
+});
+
+// TENDENCIA DE PRÉSTAMOS POR MES (ÚLTIMOS 6 MESES) (GET /reportes/prestamos-mes)
+app.get('/reportes/prestamos-mes', async (req, res) => {
+    try {
+        const { fechaInicio, fechaFin } = req.query;
+        let query = `
+            SELECT 
+                TO_CHAR(fecha_prestamo, 'YYYY-MM') AS mes,
+                COUNT(*) AS total_prestamos
+            FROM prestamos
+        `;
+        const values = [];
+
+        if (fechaInicio && fechaFin) {
+            query += " WHERE fecha_prestamo >= $1 AND fecha_prestamo <= $2";
+            values.push(fechaInicio, fechaFin);
+        } else {
+            query += " WHERE fecha_prestamo >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 months'";
+        }
+
+        query += `
+            GROUP BY TO_CHAR(fecha_prestamo, 'YYYY-MM')
+            ORDER BY mes ASC
+        `;
+        
+        const resultado = await db.query(query, values);
+        // Convertimos a número para asegurar el tipo de dato correcto
+        const datos = resultado.rows.map(row => ({
+            ...row,
+            total_prestamos: parseInt(row.total_prestamos, 10)
+        }));
+        res.json(datos);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener la tendencia de préstamos' });
+    }
+});
+
+// REPORTE DE MOROSIDAD (GET /reportes/morosidad)
+app.get('/reportes/morosidad', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                b.nombre_completo AS beneficiario,
+                b.telefono,
+                i.nombre AS aparato,
+                p.fecha_prestamo,
+                p.fecha_limite_devolucion,
+                CURRENT_DATE - p.fecha_limite_devolucion AS dias_retraso
+            FROM prestamos p
+            JOIN beneficiarios b ON p.id_beneficiario = b.id_beneficiario
+            JOIN inventario i ON p.id_articulo = i.id_articulo
+            WHERE p.estado_prestamo = 'Activo' 
+              AND p.fecha_limite_devolucion < CURRENT_DATE
+            ORDER BY dias_retraso DESC
+        `;
+        const resultado = await db.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener el reporte de morosidad' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

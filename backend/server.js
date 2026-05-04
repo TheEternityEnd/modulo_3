@@ -83,6 +83,165 @@ app.post('/login', async (req, res) => {
     }
 });
 
+// ==========================================
+// RUTAS DE INVENTARIO (CRUD)
+// ==========================================
+
+// OBTENER TODOS LOS ARTÍCULOS (GET /inventario)
+app.get('/inventario', async (req, res) => {
+    try {
+        const resultado = await db.query('SELECT * FROM inventario ORDER BY id_articulo ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener el inventario' });
+    }
+});
+
+// AGREGAR NUEVO ARTÍCULO (POST /inventario)
+app.post('/inventario', async (req, res) => {
+    const { codigo_articulo, nombre, descripcion, categoria, cantidad_total, cantidad_disponible, estado_fisico } = req.body;
+    try {
+        const resultado = await db.query(
+            `INSERT INTO inventario 
+             (codigo_articulo, nombre, descripcion, categoria, cantidad_total, cantidad_disponible, estado_fisico) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) 
+             RETURNING *`,
+            [codigo_articulo, nombre, descripcion, categoria, cantidad_total, cantidad_disponible, estado_fisico || 'Bueno']
+        );
+        res.status(201).json({ mensaje: 'Artículo agregado exitosamente', articulo: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al agregar el artículo' });
+    }
+});
+
+// ACTUALIZAR ARTÍCULO (PUT /inventario/:id)
+app.put('/inventario/:id', async (req, res) => {
+    const { id } = req.params;
+    const { codigo_articulo, nombre, descripcion, categoria, cantidad_total, cantidad_disponible, estado_fisico } = req.body;
+    try {
+        const resultado = await db.query(
+            `UPDATE inventario 
+             SET codigo_articulo = COALESCE($1, codigo_articulo),
+                 nombre = COALESCE($2, nombre),
+                 descripcion = COALESCE($3, descripcion),
+                 categoria = COALESCE($4, categoria),
+                 cantidad_total = COALESCE($5, cantidad_total),
+                 cantidad_disponible = COALESCE($6, cantidad_disponible),
+                 estado_fisico = COALESCE($7, estado_fisico)
+             WHERE id_articulo = $8 
+             RETURNING *`,
+            [codigo_articulo, nombre, descripcion, categoria, cantidad_total, cantidad_disponible, estado_fisico, id]
+        );
+
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ error: 'Artículo no encontrado' });
+        }
+        res.json({ mensaje: 'Artículo actualizado exitosamente', articulo: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar el artículo' });
+    }
+});
+
+// ELIMINAR ARTÍCULO (DELETE /inventario/:id)
+app.delete('/inventario/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const resultado = await db.query('DELETE FROM inventario WHERE id_articulo = $1 RETURNING *', [id]);
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ error: 'Artículo no encontrado' });
+        }
+        res.json({ mensaje: 'Artículo eliminado exitosamente', articulo: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al eliminar el artículo' });
+    }
+});
+
+// ==========================================
+// RUTAS DE PRÉSTAMOS
+// ==========================================
+
+app.post('/prestamos', async (req, res) => {
+    // La base de datos asume 1 artículo por registro de préstamo, así que se restará 1 unidad.
+    const { id_articulo, id_beneficiario, id_usuario_autoriza, fecha_limite_devolucion, observaciones } = req.body;
+
+    const cliente = await db.connect();
+    try {
+        await cliente.query('BEGIN'); // Iniciar transacción
+
+        // 1. Verificar stock
+        const art = await cliente.query('SELECT cantidad_disponible FROM inventario WHERE id_articulo = $1', [id_articulo]);
+        if (art.rows.length === 0) throw new Error('Artículo no encontrado');
+        if (art.rows[0].cantidad_disponible < 1) throw new Error('Stock insuficiente para realizar el préstamo');
+
+        // 2. Descontar 1 unidad del inventario
+        await cliente.query('UPDATE inventario SET cantidad_disponible = cantidad_disponible - 1 WHERE id_articulo = $1', [id_articulo]);
+
+        // 3. Registrar préstamo
+        const prestamo = await cliente.query(
+            `INSERT INTO prestamos (id_articulo, id_beneficiario, id_usuario_autoriza, fecha_limite_devolucion, observaciones)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [id_articulo, id_beneficiario, id_usuario_autoriza || 1, fecha_limite_devolucion, observaciones]
+        );
+
+        await cliente.query('COMMIT'); // Confirmar cambios
+        res.status(201).json({ mensaje: 'Préstamo registrado y stock descontado exitosamente', prestamo: prestamo.rows[0] });
+    } catch (error) {
+        await cliente.query('ROLLBACK'); // Revertir en caso de error
+        console.error(error);
+        res.status(400).json({ error: error.message || 'Error al registrar el préstamo' });
+    } finally {
+        cliente.release(); // Liberar conexión al pool
+    }
+});
+
+// ==========================================
+// RUTAS DE DEVOLUCIONES
+// ==========================================
+
+app.post('/devoluciones', async (req, res) => {
+    const { id_prestamo, id_usuario_recibe, estado_fisico_recibido, multa_o_cargo, observaciones } = req.body;
+
+    const cliente = await db.connect();
+    try {
+        await cliente.query('BEGIN'); // Iniciar transacción
+
+        // 1. Verificar que el préstamo exista y esté activo
+        const prestamo = await cliente.query('SELECT * FROM prestamos WHERE id_prestamo = $1 AND estado_prestamo = $2', [id_prestamo, 'Activo']);
+        if (prestamo.rows.length === 0) throw new Error('Préstamo no encontrado o ya fue devuelto');
+        
+        const id_articulo = prestamo.rows[0].id_articulo;
+
+        // 2. Cambiar estado del préstamo a Devuelto
+        await cliente.query('UPDATE prestamos SET estado_prestamo = $1 WHERE id_prestamo = $2', ['Devuelto', id_prestamo]);
+
+        // 3. Registrar la devolución
+        const devolucion = await cliente.query(
+            `INSERT INTO devoluciones (id_prestamo, id_usuario_recibe, estado_fisico_recibido, multa_o_cargo, observaciones)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [id_prestamo, id_usuario_recibe || 1, estado_fisico_recibido, multa_o_cargo || 0, observaciones]
+        );
+
+        // 4. Devolver 1 unidad al inventario y actualizar su estado físico
+        await cliente.query(
+            'UPDATE inventario SET cantidad_disponible = cantidad_disponible + 1, estado_fisico = $1 WHERE id_articulo = $2', 
+            [estado_fisico_recibido, id_articulo]
+        );
+
+        await cliente.query('COMMIT'); // Confirmar cambios
+        res.status(201).json({ mensaje: 'Devolución registrada y stock restaurado exitosamente', devolucion: devolucion.rows[0] });
+    } catch (error) {
+        await cliente.query('ROLLBACK'); // Revertir cambios
+        console.error(error);
+        res.status(400).json({ error: error.message || 'Error al registrar la devolución' });
+    } finally {
+        cliente.release();
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

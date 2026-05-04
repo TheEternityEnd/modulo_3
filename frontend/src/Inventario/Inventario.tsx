@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   Package, 
@@ -15,7 +15,13 @@ import {
   Edit,
   Trash2,
   HeartPulse,
-  FilterX
+  FilterX,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Download,
+  History
 } from 'lucide-react';
 
 interface InventarioProps {
@@ -23,118 +29,163 @@ interface InventarioProps {
   onNavigate: (view: string) => void;
 }
 
-
+export interface Articulo {
+  id_articulo?: number;
+  codigo_articulo: string;
+  nombre: string;
+  descripcion: string;
+  categoria: string;
+  cantidad_total: number;
+  cantidad_disponible: number;
+  estado_fisico: string;
+  fecha_ingreso?: string;
+}
 
 const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas las categorías');
   const [statusFilter, setStatusFilter] = useState('Todos los estados');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [hoveredImage, setHoveredImage] = useState<string | null>(null);
-  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+  
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
 
-  const img = 'https://dummyimage.com/800x800/000/fff';
+  const showToast = (message: string, type: 'success'|'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+  
+  const [inventoryData, setInventoryData] = useState<Articulo[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const inventoryData = [
-    { 
-      nombre: 'Silla de ruedas estándar', 
-      categoria: 'Silla de ruedas', 
-      estado: 'Disponible', 
-      cantidad: 8, 
-      ubicacion: 'Almacén A', 
-      observaciones: 'Buen estado',
-      imagen: img
-    },
-    { 
-      nombre: 'Muletas de aluminio', 
-      categoria: 'Muletas', 
-      estado: 'Disponible', 
-      cantidad: 15, 
-      ubicacion: 'Almacén B', 
-      observaciones: 'Ajustables en altura',
-      imagen: img
-    },
-    { 
-      nombre: 'Andadera con ruedas', 
-      categoria: 'Andadera', 
-      estado: 'Prestado', 
-      cantidad: 3, 
-      ubicacion: 'Almacén A', 
-      observaciones: 'Con frenos',
-      imagen: img
-    },
-    { 
-      nombre: 'Bastón de apoyo', 
-      categoria: 'Bastón', 
-      estado: 'Disponible', 
-      cantidad: 20, 
-      ubicacion: 'Almacén C', 
-      observaciones: 'Varios tamaños',
-      imagen: img
-    },
-    { 
-      nombre: 'Silla de ruedas eléctrica', 
-      categoria: 'Silla de ruedas', 
-      estado: 'Mantenimiento', 
-      cantidad: 1, 
-      ubicacion: 'Taller', 
-      observaciones: 'Batería en revisión',
-      imagen: img
-    },
-    { 
-      nombre: 'Muletas canadienses', 
-      categoria: 'Muletas', 
-      estado: 'Disponible', 
-      cantidad: 10, 
-      ubicacion: 'Almacén B', 
-      observaciones: 'Con soporte de antebrazo',
-      imagen: img
-    },
-    { 
-      nombre: 'Andadera sin ruedas', 
-      categoria: 'Andadera', 
-      estado: 'Disponible', 
-      cantidad: 5, 
-      ubicacion: 'Almacén A', 
-      observaciones: 'Para interiores',
-      imagen: img
-    },
-    { 
-      nombre: 'Bastón con cuatro puntos', 
-      categoria: 'Bastón', 
-      estado: 'Prestado', 
-      cantidad: 2, 
-      ubicacion: 'Almacén C', 
-      observaciones: 'Mayor estabilidad',
-      imagen: img
-    },
-  ];
+  const [formData, setFormData] = useState<Articulo>({
+    codigo_articulo: '',
+    nombre: '',
+    descripcion: '',
+    categoria: 'Silla de ruedas',
+    cantidad_total: 1,
+    cantidad_disponible: 1,
+    estado_fisico: 'Disponible'
+  });
+
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  const fetchInventory = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:3000/inventario');
+      if (!res.ok) throw new Error('Error al cargar el inventario');
+      const data = await res.json();
+      setInventoryData(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Frontend validation
+    if (!formData.nombre.trim()) {
+      showToast('El nombre no puede estar vacío', 'error');
+      return;
+    }
+    if (formData.cantidad_total < 0 || formData.cantidad_disponible < 0) {
+      showToast('Las cantidades no pueden ser negativas', 'error');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const res = await fetch('http://localhost:3000/inventario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar');
+      
+      setInventoryData(prev => [...prev, data.articulo]);
+      setIsModalOpen(false);
+      setFormData({
+        codigo_articulo: '',
+        nombre: '',
+        descripcion: '',
+        categoria: 'Silla de ruedas',
+        cantidad_total: 1,
+        cantidad_disponible: 1,
+        estado_fisico: 'Disponible'
+      });
+      showToast('Artículo guardado exitosamente', 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Hubo un error al guardar el artículo', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async (id?: number) => {
+    if (!id) return;
+    if (!confirm('¿Estás seguro de eliminar este artículo?')) return;
+    
+    setActionLoading(true);
+    try {
+      const res = await fetch(`http://localhost:3000/inventario/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar');
+      
+      setInventoryData(prev => prev.filter(item => item.id_articulo !== id));
+      showToast('Artículo eliminado exitosamente', 'success');
+    } catch(err: any) {
+      console.error(err);
+      showToast(err.message || 'Error al eliminar el artículo', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Código', 'Nombre', 'Categoría', 'Estado', 'Stock Disp', 'Stock Total', 'Descripción'];
+    const rows = filteredData.map(item => [
+      `"${item.codigo_articulo}"`,
+      `"${item.nombre}"`,
+      `"${item.categoria}"`,
+      `"${item.estado_fisico}"`,
+      item.cantidad_disponible,
+      item.cantidad_total,
+      `"${(item.descripcion || '').replace(/"/g, '""')}"`
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
+      + headers.join(",") + "\n" 
+      + rows.map(e => e.join(",")).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "reporte_inventario.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Inventario exportado correctamente', 'success');
+  };
 
   const filteredData = useMemo(() => {
     return inventoryData.filter(item => {
       const matchesSearch = item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           item.observaciones.toLowerCase().includes(searchTerm.toLowerCase());
+                           (item.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (item.codigo_articulo || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = categoryFilter === 'Todas las categorías' || item.categoria === categoryFilter;
-      const matchesStatus = statusFilter === 'Todos los estados' || item.estado === statusFilter;
+      const matchesStatus = statusFilter === 'Todos los estados' || item.estado_fisico === statusFilter;
       
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [searchTerm, categoryFilter, statusFilter]);
-
-  const handleMouseEnter = (e: React.MouseEvent, imagen: string) => {
-    setHoveredImage(imagen);
-    setImagePosition({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (hoveredImage) {
-      setImagePosition({ x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredImage(null);
-  };
+  }, [inventoryData, searchTerm, categoryFilter, statusFilter]);
 
   return (
     <div className="flex h-screen bg-[#f3f4f6] font-sans relative overflow-hidden text-slate-900">
@@ -195,13 +246,22 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
               <h2 className="text-2xl font-extrabold text-slate-900">Inventario de Aparatos</h2>
               <p className="text-slate-500 font-medium mt-1">Gestión y control de aparatos ortopédicos</p>
             </div>
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
-            >
-              <Plus size={20} strokeWidth={2.5} />
-              <span>Agregar Aparato</span>
-            </button>
+            <div className="flex gap-3">
+              <button 
+                onClick={handleExportCSV}
+                className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm transition-all active:scale-[0.98]"
+              >
+                <Download size={20} strokeWidth={2.5} className="text-[#5ba4c7]" />
+                <span>Exportar CSV</span>
+              </button>
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
+              >
+                <Plus size={20} strokeWidth={2.5} />
+                <span>Agregar Aparato</span>
+              </button>
+            </div>
           </div>
 
           {/* Filters Bar */}
@@ -210,7 +270,7 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input 
                 type="text" 
-                placeholder="Buscar aparato..." 
+                placeholder="Buscar por código, nombre o descripción..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/5 focus:border-[#5ba4c7] transition-all"
@@ -245,48 +305,59 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-sm">
                   <tr className="border-b border-slate-100">
+                    <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Código</th>
                     <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Nombre</th>
                     <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Categoría</th>
                     <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Estado</th>
-                    <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Cantidad</th>
-                    <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Ubicación</th>
-                    <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Observaciones</th>
+                    <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Stock Disp.</th>
+                    <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Descripción</th>
                     <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredData.length > 0 ? (
+                  {loading ? (
+                     <tr>
+                        <td colSpan={7} className="px-8 py-10 text-center text-slate-500 font-medium">Cargando inventario...</td>
+                     </tr>
+                  ) : filteredData.length > 0 ? (
                     filteredData.map((item, index) => (
                       <tr key={index} className="hover:bg-slate-50/30 transition-colors group">
+                        <td className="px-8 py-5 text-sm text-slate-500 font-medium">{item.codigo_articulo}</td>
                         <td className="px-8 py-5 font-bold text-slate-900 text-sm group-hover:text-[#5ba4c7] transition-colors">{item.nombre}</td>
                         <td className="px-8 py-5 text-sm text-slate-500 font-medium">{item.categoria}</td>
                         <td className="px-8 py-5 text-center">
                           <span className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-sm border ${
-                            item.estado === 'Disponible' ? 'bg-[#94d6c6] text-slate-900 border-[#94d6c6]/20' :
-                            item.estado === 'Prestado' ? 'bg-[#5ba4c7] text-white border-[#5ba4c7]/20' :
+                            item.estado_fisico === 'Disponible' ? 'bg-[#94d6c6] text-slate-900 border-[#94d6c6]/20' :
+                            item.estado_fisico === 'Prestado' ? 'bg-[#5ba4c7] text-white border-[#5ba4c7]/20' :
                             'bg-[#ffcc6f] text-slate-900 border-[#ffcc6f]/20'
                           }`}>
-                            {item.estado}
+                            {item.estado_fisico}
                           </span>
                         </td>
-                        <td className="px-8 py-5 text-center font-bold text-slate-900 text-sm">{item.cantidad}</td>
-                        <td className="px-8 py-5 text-sm text-slate-500 font-medium">{item.ubicacion}</td>
-                        <td className="px-8 py-5 text-sm text-slate-500 font-medium">{item.observaciones}</td>
+                        <td className="px-8 py-5 text-center font-bold text-sm">
+                          {item.cantidad_disponible <= 2 ? (
+                            <span className="inline-flex items-center justify-center gap-1.5 text-rose-600 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-100 shadow-sm" title="¡Stock bajo!">
+                              <AlertCircle size={14} strokeWidth={3} />
+                              {item.cantidad_disponible} / {item.cantidad_total}
+                            </span>
+                          ) : (
+                            <span className="text-slate-900">{item.cantidad_disponible} / {item.cantidad_total}</span>
+                          )}
+                        </td>
+                        <td className="px-8 py-5 text-sm text-slate-500 font-medium">{item.descripcion}</td>
                         <td className="px-8 py-5">
                           <div className="flex items-center justify-center gap-3 opacity-80 group-hover:opacity-100 transition-opacity">
-                            <button 
-                              className="p-2 text-[#5ba4c7] hover:bg-[#5ba4c7]/10 rounded-xl transition-all hover:scale-110 relative"
-                              title="Ver detalle"
-                              onMouseEnter={(e) => handleMouseEnter(e, item.imagen)}
-                              onMouseMove={handleMouseMove}
-                              onMouseLeave={handleMouseLeave}
-                            >
-                              <Eye size={18} />
+                            <button className="p-2 text-[#5ba4c7] hover:bg-[#5ba4c7]/10 rounded-xl transition-all hover:scale-110" title="Ver Historial">
+                              <History size={18} />
                             </button>
                             <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-all hover:scale-110" title="Editar">
                               <Edit size={18} />
                             </button>
-                            <button className="p-2 text-[#ff8a71] hover:bg-[#ff8a71]/10 rounded-xl transition-all hover:scale-110" title="Eliminar">
+                            <button 
+                              className="p-2 text-[#ff8a71] hover:bg-[#ff8a71]/10 rounded-xl transition-all hover:scale-110" 
+                              title="Eliminar"
+                              onClick={() => handleDelete(item.id_articulo)}
+                            >
                               <Trash2 size={18} />
                             </button>
                           </div>
@@ -302,7 +373,7 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
                           </div>
                           <div className="space-y-1">
                             <p className="text-slate-900 font-bold text-lg">No se encontraron resultados</p>
-                            <p className="text-slate-500 text-sm font-medium">Intenta ajustar los filtros para encontrar lo que buscas</p>
+                            <p className="text-slate-500 text-sm font-medium">Intenta ajustar los filtros o verifica el servidor</p>
                           </div>
                           <button 
                             onClick={() => {
@@ -325,74 +396,69 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
         </div>
       </main>
 
-      {/* Image Preview Tooltip */}
-      {hoveredImage && (
-        <div 
-          className="fixed z-50 pointer-events-none"
-          style={{
-            left: `${imagePosition.x + -260}px`,
-            top: `${imagePosition.y + -220}px`,
-            transform: 'translate(0, 0)'
-          }}
-        >
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in duration-150">
-            <img 
-              src={hoveredImage} 
-              alt="Vista previa" 
-              className="w-64 h-auto max-h-48 object-cover"
-            />
-            <div className="px-3 py-2 bg-slate-50 border-t border-slate-100">
-              <p className="text-xs text-slate-600 font-medium">Vista previa del aparato</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modal Agregar Aparato */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Overlay */}
           <div 
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
             onClick={() => setIsModalOpen(false)}
           ></div>
 
-          {/* Modal Content */}
           <div className="relative bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-8 border-b border-slate-100">
               <h3 className="text-xl font-bold text-slate-900">Agregar Nuevo Aparato</h3>
             </div>
 
-            <form className="p-8 space-y-6" onSubmit={(e) => { e.preventDefault(); setIsModalOpen(false); }}>
-              {/* Nombre */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700 ml-1">Nombre del aparato</label>
-                <input 
-                  type="text" 
-                  placeholder="Ej: Silla de ruedas estándar" 
-                  className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
-                  required
-                />
+            <form className="p-8 space-y-6" onSubmit={handleSaveItem}>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 ml-1">Código de Artículo</label>
+                  <input 
+                    type="text" 
+                    value={formData.codigo_articulo}
+                    onChange={(e) => setFormData({...formData, codigo_articulo: e.target.value})}
+                    placeholder="Ej: SR-001" 
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 ml-1">Nombre del aparato</label>
+                  <input 
+                    type="text" 
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+                    placeholder="Ej: Silla de ruedas estándar" 
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+                    required
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-6">
-                {/* Categoría */}
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 ml-1">Categoría</label>
-                  <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all cursor-pointer">
+                  <select 
+                    value={formData.categoria}
+                    onChange={(e) => setFormData({...formData, categoria: e.target.value})}
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all cursor-pointer"
+                  >
                     <option>Silla de ruedas</option>
                     <option>Muletas</option>
                     <option>Andadera</option>
                     <option>Bastón</option>
                   </select>
                 </div>
-                {/* Cantidad */}
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Cantidad</label>
+                  <label className="text-sm font-bold text-slate-700 ml-1">Cantidad Total</label>
                   <input 
                     type="number" 
-                    placeholder="0" 
-                    min="0"
+                    value={formData.cantidad_total}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setFormData({...formData, cantidad_total: val, cantidad_disponible: val});
+                    }}
+                    min="1"
                     className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
                     required
                   />
@@ -400,48 +466,31 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
               </div>
 
               <div className="grid grid-cols-2 gap-6">
-                {/* Estado */}
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Estado</label>
-                  <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all cursor-pointer">
-                    <option>Disponible</option>
-                    <option>Prestado</option>
-                    <option>Mantenimiento</option>
+                  <label className="text-sm font-bold text-slate-700 ml-1">Estado Físico</label>
+                  <select 
+                    value={formData.estado_fisico}
+                    onChange={(e) => setFormData({...formData, estado_fisico: e.target.value})}
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all cursor-pointer"
+                  >
+                    <option value="Disponible">Disponible</option>
+                    <option value="Prestado">Prestado</option>
+                    <option value="Mantenimiento">Mantenimiento</option>
                   </select>
                 </div>
-                {/* Ubicación */}
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Ubicación</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ej: Almacén A" 
-                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
-                    required
-                  />
-                </div>
               </div>
 
-              {/* Imagen */}
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700 ml-1">URL de la imagen</label>
-                <input 
-                  type="url" 
-                  placeholder="https://ejemplo.com/imagen.jpg" 
-                  className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* Observaciones */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700 ml-1">Observaciones</label>
+                <label className="text-sm font-bold text-slate-700 ml-1">Descripción / Observaciones</label>
                 <textarea 
                   rows={3}
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
                   placeholder="Detalles adicionales del aparato..." 
                   className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400 resize-none"
                 ></textarea>
               </div>
 
-              {/* Botones de acción */}
               <div className="flex items-center justify-end gap-4 pt-4">
                 <button 
                   type="button"
@@ -452,13 +501,24 @@ const Inventario: React.FC<InventarioProps> = ({ onLogout, onNavigate }) => {
                 </button>
                 <button 
                   type="submit"
-                  className="px-8 py-3.5 text-sm font-bold text-white bg-[#5ba4c7] hover:bg-[#4a8ba9] rounded-2xl shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
+                  disabled={actionLoading}
+                  className="px-8 py-3.5 text-sm font-bold text-white bg-[#5ba4c7] hover:bg-[#4a8ba9] rounded-2xl shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98] disabled:opacity-70 flex items-center gap-2"
                 >
-                  Guardar Aparato
+                  {actionLoading ? <Loader2 size={18} className="animate-spin" /> : null}
+                  <span>Guardar Aparato</span>
                 </button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border animate-in slide-in-from-bottom-5 fade-in duration-300 ${
+          toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle size={20} className="text-green-500" /> : <XCircle size={20} className="text-red-500" />}
+          <span className="font-medium text-sm">{toast.message}</span>
         </div>
       )}
     </div>

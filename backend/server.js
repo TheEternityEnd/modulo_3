@@ -175,6 +175,89 @@ app.get('/beneficiarios', async (req, res) => {
     }
 });
 
+// AGREGAR NUEVO BENEFICIARIO (POST /beneficiarios)
+app.post('/beneficiarios', async (req, res) => {
+    const { nombre_completo, identificacion, telefono, correo, direccion } = req.body;
+    try {
+        // Validación de Identificación Única
+        const existe = await db.query('SELECT id_beneficiario FROM beneficiarios WHERE identificacion = $1', [identificacion]);
+        if (existe.rows.length > 0) {
+            return res.status(400).json({ error: 'Este usuario ya está registrado' });
+        }
+
+        const resultado = await db.query(
+            `INSERT INTO beneficiarios 
+             (nombre_completo, identificacion, telefono, correo, direccion) 
+             VALUES ($1, $2, $3, $4, $5) 
+             RETURNING *`,
+            [nombre_completo, identificacion, telefono, correo, direccion]
+        );
+        res.status(201).json({ mensaje: 'Beneficiario agregado exitosamente', beneficiario: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        if (error.code === '23505') { // Postgres Unique Violation
+            return res.status(400).json({ error: 'Este usuario ya está registrado' });
+        }
+        res.status(500).json({ error: 'Error al agregar el beneficiario' });
+    }
+});
+
+// ACTUALIZAR BENEFICIARIO (PUT /beneficiarios/:id)
+app.put('/beneficiarios/:id', async (req, res) => {
+    const { id } = req.params;
+    const { nombre_completo, identificacion, telefono, correo, direccion } = req.body;
+    try {
+        // Verificar si la nueva identificación ya pertenece a otro usuario
+        if (identificacion) {
+            const existe = await db.query('SELECT id_beneficiario FROM beneficiarios WHERE identificacion = $1 AND id_beneficiario != $2', [identificacion, id]);
+            if (existe.rows.length > 0) {
+                return res.status(400).json({ error: 'Este usuario ya está registrado con la misma identificación' });
+            }
+        }
+
+        const resultado = await db.query(
+            `UPDATE beneficiarios 
+             SET nombre_completo = COALESCE($1, nombre_completo),
+                 identificacion = COALESCE($2, identificacion),
+                 telefono = COALESCE($3, telefono),
+                 correo = COALESCE($4, correo),
+                 direccion = COALESCE($5, direccion)
+             WHERE id_beneficiario = $6 
+             RETURNING *`,
+            [nombre_completo, identificacion, telefono, correo, direccion, id]
+        );
+
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ error: 'Beneficiario no encontrado' });
+        }
+        res.json({ mensaje: 'Beneficiario actualizado exitosamente', beneficiario: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar el beneficiario' });
+    }
+});
+
+// ELIMINAR BENEFICIARIO (DELETE /beneficiarios/:id)
+app.delete('/beneficiarios/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Verificar si tiene historial de préstamos (llave foránea)
+        const prestamos = await db.query('SELECT id_prestamo FROM prestamos WHERE id_beneficiario = $1 LIMIT 1', [id]);
+        if (prestamos.rows.length > 0) {
+            return res.status(400).json({ error: 'No se puede eliminar: El beneficiario tiene un historial de préstamos.' });
+        }
+
+        const resultado = await db.query('DELETE FROM beneficiarios WHERE id_beneficiario = $1 RETURNING *', [id]);
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ error: 'Beneficiario no encontrado' });
+        }
+        res.json({ mensaje: 'Beneficiario eliminado exitosamente', beneficiario: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al eliminar el beneficiario. Verifique que no tenga dependencias.' });
+    }
+});
+
 // ==========================================
 // RUTAS DE PRÉSTAMOS
 // ==========================================
@@ -190,7 +273,8 @@ app.get('/prestamos', async (req, res) => {
                 p.estado_prestamo,
                 p.observaciones,
                 i.nombre AS nombre_articulo,
-                b.nombre_completo AS nombre_beneficiario
+                b.nombre_completo AS nombre_beneficiario,
+                b.id_beneficiario
             FROM prestamos p
             JOIN inventario i ON p.id_articulo = i.id_articulo
             JOIN beneficiarios b ON p.id_beneficiario = b.id_beneficiario

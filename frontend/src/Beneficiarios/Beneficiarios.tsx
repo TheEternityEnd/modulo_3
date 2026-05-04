@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   LayoutDashboard,
   Package,
@@ -14,8 +14,10 @@ import {
   Phone,
   MapPin,
   History,
-  HeartPulse,
-  X
+  X,
+  Edit2,
+  Trash2,
+  Download
 } from 'lucide-react';
 
 interface BeneficiariosProps {
@@ -24,75 +26,182 @@ interface BeneficiariosProps {
 }
 
 interface Beneficiario {
-  id: number;
-  nombre: string;
+  id_beneficiario: number;
+  nombre_completo: string;
+  identificacion: string;
   telefono: string;
+  correo: string;
   direccion: string;
-  totalPrestamos: number;
-  prestamosActivos: number;
-  ultimoPrestamo: string;
+  fecha_registro: string;
 }
 
 const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiario | null>(null);
+  const [beneficiariosData, setBeneficiariosData] = useState<Beneficiario[]>([]);
+  const [prestamosData, setPrestamosData] = useState<any[]>([]);
 
-  const beneficiariosData: Beneficiario[] = [
-    {
-      id: 1,
-      nombre: 'María González García',
-      telefono: '555-1234-5678',
-      direccion: 'Calle Principal #123, Col. Centro',
-      totalPrestamos: 5,
-      prestamosActivos: 1,
-      ultimoPrestamo: '2026-03-01',
-    },
-    {
-      id: 2,
-      nombre: 'José Luis Ramírez',
-      telefono: '555-2345-6789',
-      direccion: 'Av. Juárez #456, Col. Norte',
-      totalPrestamos: 3,
-      prestamosActivos: 1,
-      ultimoPrestamo: '2026-03-05',
-    },
-    {
-      id: 3,
-      nombre: 'Ana Patricia Flores',
-      telefono: '555-3456-7890',
-      direccion: 'Calle 5 de Mayo #789, Col. Sur',
-      totalPrestamos: 8,
-      prestamosActivos: 0,
-      ultimoPrestamo: '2026-02-28',
-    },
-    {
-      id: 4,
-      nombre: 'Carlos Méndez Pérez',
-      telefono: '555-4567-8901',
-      direccion: 'Blvd. Libertad #321, Col. Este',
-      totalPrestamos: 2,
-      prestamosActivos: 1,
-      ultimoPrestamo: '2026-03-07',
-    },
-    {
-      id: 5,
-      nombre: 'Rosa Elena Torres',
-      telefono: '555-5678-9012',
-      direccion: 'Calle Hidalgo #654, Col. Oeste',
-      totalPrestamos: 4,
-      prestamosActivos: 1,
-      ultimoPrestamo: '2026-03-08',
-    },
-  ];
+  // Form states
+  const [nombreCompleto, setNombreCompleto] = useState('');
+  const [identificacion, setIdentificacion] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [direccion, setDireccion] = useState('');
+
+  const fetchBeneficiarios = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/beneficiarios');
+      const data = await response.json();
+      setBeneficiariosData(data);
+    } catch (error) {
+      console.error('Error al obtener beneficiarios:', error);
+    }
+  };
+
+  const fetchPrestamos = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/prestamos');
+      const data = await response.json();
+      setPrestamosData(data);
+    } catch (error) {
+      console.error('Error al obtener préstamos:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBeneficiarios();
+    fetchPrestamos();
+  }, []);
+
+  const handleOpenNewModal = () => {
+    setEditingId(null);
+    setNombreCompleto('');
+    setIdentificacion('');
+    setTelefono('');
+    setCorreo('');
+    setDireccion('');
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (beneficiario: Beneficiario, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(beneficiario.id_beneficiario);
+    setNombreCompleto(beneficiario.nombre_completo || '');
+    setIdentificacion(beneficiario.identificacion || '');
+    setTelefono(beneficiario.telefono || '');
+    setCorreo(beneficiario.correo || '');
+    setDireccion(beneficiario.direccion || '');
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('¿Estás seguro de eliminar este beneficiario?')) return;
+    
+    try {
+      const res = await fetch(`http://localhost:3000/beneficiarios/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchBeneficiarios();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Error al eliminar');
+      }
+    } catch (error) {
+      alert('Error de red al intentar eliminar.');
+    }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Nombre', 'Identificacion', 'Telefono', 'Correo', 'Direccion', 'Fecha de Registro'];
+    const csvContent = [
+      headers.join(','),
+      ...beneficiariosData.map((b) => 
+        [
+          b.id_beneficiario,
+          `"${b.nombre_completo || ''}"`,
+          `"${b.identificacion || ''}"`,
+          `"${b.telefono || ''}"`,
+          `"${b.correo || ''}"`,
+          `"${b.direccion || ''}"`,
+          new Date(b.fecha_registro).toLocaleDateString('es-MX')
+        ].join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `directorio_beneficiarios_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validaciones de formato en Frontend
+    const phoneRegex = /^[0-9+\-\s()]+$/;
+    if (telefono && !phoneRegex.test(telefono)) {
+      alert('El teléfono solo puede contener números y los símbolos + - ( )');
+      return;
+    }
+
+    if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      alert('Por favor, ingresa un correo electrónico válido con el símbolo "@" y un dominio');
+      return;
+    }
+
+    try {
+      const url = editingId 
+        ? `http://localhost:3000/beneficiarios/${editingId}`
+        : 'http://localhost:3000/beneficiarios';
+      const method = editingId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre_completo: nombreCompleto,
+          identificacion,
+          telefono,
+          correo,
+          direccion
+        })
+      });
+      if (res.ok) {
+        setIsModalOpen(false);
+        setEditingId(null);
+        setNombreCompleto('');
+        setIdentificacion('');
+        setTelefono('');
+        setCorreo('');
+        setDireccion('');
+        fetchBeneficiarios();
+      } else {
+        const errorData = await res.json();
+        alert('Error: ' + (errorData.error || 'Error desconocido'));
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error de conexión');
+    }
+  };
 
   const filteredBeneficiarios = useMemo(() => {
-    return beneficiariosData.filter((item) =>
-      item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.telefono.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.direccion.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm]);
+    return beneficiariosData.filter((item) => {
+      const term = searchTerm.toLowerCase();
+      return (
+        (item.nombre_completo && item.nombre_completo.toLowerCase().includes(term)) ||
+        (item.telefono && item.telefono.toLowerCase().includes(term)) ||
+        (item.direccion && item.direccion.toLowerCase().includes(term)) ||
+        (item.identificacion && item.identificacion.toLowerCase().includes(term))
+      );
+    });
+  }, [searchTerm, beneficiariosData]);
 
   return (
     <div className="flex h-screen bg-[#f3f4f6] font-sans relative overflow-hidden text-slate-900">
@@ -158,13 +267,22 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
               </p>
             </div>
 
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
-            >
-              <Plus size={20} strokeWidth={2.5} />
-              <span>Nuevo Beneficiario</span>
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={handleExportCSV}
+                className="bg-white hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 border border-slate-200 shadow-sm transition-all active:scale-[0.98]"
+              >
+                <Download size={20} strokeWidth={2.5} className="text-slate-400" />
+                <span>Exportar CSV</span>
+              </button>
+              <button
+                onClick={handleOpenNewModal}
+                className="bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
+              >
+                <Plus size={20} strokeWidth={2.5} />
+                <span>Nuevo Beneficiario</span>
+              </button>
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -173,7 +291,7 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input
                 type="text"
-                placeholder="Buscar beneficiario por nombre..."
+                placeholder="Buscar beneficiario por nombre o identificación..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/5 focus:border-[#5ba4c7] transition-all"
@@ -185,15 +303,19 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
           <div className="grid grid-cols-1 xl:grid-cols-3 md:grid-cols-2 gap-6">
             {filteredBeneficiarios.length > 0 ? (
               filteredBeneficiarios.map((beneficiario) => {
-                const iniciales = beneficiario.nombre
-                  .split(' ')
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join('');
+                const iniciales = beneficiario.nombre_completo
+                  ? beneficiario.nombre_completo.split(' ').map((n) => n[0]).slice(0, 2).join('')
+                  : 'N/A';
+                  
+                const isMoroso = prestamosData.some(p => 
+                  p.id_beneficiario === beneficiario.id_beneficiario && 
+                  p.estado_prestamo === 'Activo' && 
+                  new Date(p.fecha_limite_devolucion) < new Date()
+                );
 
                 return (
                   <div
-                    key={beneficiario.id}
+                    key={beneficiario.id_beneficiario}
                     onClick={() => setSelectedBeneficiary(beneficiario)}
                     className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
                   >
@@ -201,38 +323,48 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
                       <div className="w-11 h-11 rounded-full bg-[#5ba4c7]/10 flex items-center justify-center text-[#5ba4c7] font-bold text-sm">
                         {iniciales}
                       </div>
-
-                      {beneficiario.prestamosActivos > 0 && (
-                        <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border bg-[#94d6c6] text-slate-900 border-[#94d6c6]/20 shadow-sm">
-                          {beneficiario.prestamosActivos} activo
-                          {beneficiario.prestamosActivos > 1 ? 's' : ''}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={(e) => handleEdit(beneficiario, e)}
+                          className="p-1.5 text-slate-400 hover:text-[#5ba4c7] hover:bg-[#5ba4c7]/10 rounded-lg transition-colors"
+                          title="Editar beneficiario"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={(e) => handleDelete(beneficiario.id_beneficiario, e)}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Eliminar beneficiario"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
 
-                    <h3 className="text-lg font-bold text-slate-900 mb-4 group-hover:text-[#5ba4c7] transition-colors">
-                      {beneficiario.nombre}
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 group-hover:text-[#5ba4c7] transition-colors flex items-center gap-2">
+                      {beneficiario.nombre_completo}
+                      {isMoroso && (
+                        <span className="flex h-3 w-3 relative" title="Tiene un préstamo vencido">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                        </span>
+                      )}
                     </h3>
 
                     <div className="space-y-3">
                       <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
                         <Phone size={16} className="text-[#5ba4c7]" />
-                        <span>{beneficiario.telefono}</span>
+                        <span>{beneficiario.telefono || 'Sin teléfono'}</span>
                       </div>
 
                       <div className="flex items-start gap-3 text-slate-500 text-sm font-medium">
                         <MapPin size={16} className="text-[#5ba4c7] mt-0.5" />
-                        <span>{beneficiario.direccion}</span>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
-                        <History size={16} className="text-[#5ba4c7]" />
-                        <span>{beneficiario.totalPrestamos} préstamos totales</span>
+                        <span className="line-clamp-2">{beneficiario.direccion || 'Sin dirección'}</span>
                       </div>
                     </div>
 
                     <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-400 font-medium">
-                      Último préstamo: {new Date(beneficiario.ultimoPrestamo).toLocaleDateString('es-MX')}
+                      Registrado: {new Date(beneficiario.fecha_registro).toLocaleDateString('es-MX')}
                     </div>
                   </div>
                 );
@@ -259,7 +391,7 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
 
           <div className="relative bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">Nuevo Beneficiario</h3>
+              <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Editar Beneficiario' : 'Nuevo Beneficiario'}</h3>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="p-2 rounded-xl hover:bg-slate-100 transition-colors"
@@ -270,10 +402,7 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
 
             <form
               className="p-8 space-y-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setIsModalOpen(false);
-              }}
+              onSubmit={handleRegister}
             >
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 ml-1">Nombre completo</label>
@@ -281,27 +410,47 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
                   type="text"
                   placeholder="Ej: María González García"
                   className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+                  value={nombreCompleto}
+                  onChange={(e) => setNombreCompleto(e.target.value)}
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Teléfono</label>
+                  <label className="text-sm font-bold text-slate-700 ml-1">Identificación</label>
                   <input
                     type="text"
+                    placeholder="DNI / CURP / INE"
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+                    value={identificacion}
+                    onChange={(e) => setIdentificacion(e.target.value)}
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 ml-1">Teléfono</label>
+                  <input
+                    type="tel"
                     placeholder="555-1234-5678"
                     className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
+                    pattern="[0-9+\-\s()]+"
+                    title="Solo se permiten números, espacios y los símbolos + - ( )"
                     required
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 col-span-2">
                   <label className="text-sm font-bold text-slate-700 ml-1">Correo electrónico</label>
                   <input
                     type="email"
                     placeholder="correo@ejemplo.com"
                     className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+                    value={correo}
+                    onChange={(e) => setCorreo(e.target.value)}
                   />
                 </div>
               </div>
@@ -312,17 +461,10 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
                   type="text"
                   placeholder="Calle, número, colonia, ciudad"
                   className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
                   required
                 />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700 ml-1">Observaciones</label>
-                <textarea
-                  rows={3}
-                  placeholder="Notas adicionales del beneficiario..."
-                  className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400 resize-none"
-                ></textarea>
               </div>
 
               <div className="flex items-center justify-end gap-4 pt-4">
@@ -337,7 +479,7 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
                   type="submit"
                   className="px-8 py-3.5 text-sm font-bold text-white bg-[#5ba4c7] hover:bg-[#4a8ba9] rounded-2xl shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
                 >
-                  Guardar Beneficiario
+                  {editingId ? 'Actualizar Beneficiario' : 'Guardar Beneficiario'}
                 </button>
               </div>
             </form>
@@ -367,74 +509,63 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
             <div className="p-8 space-y-8">
               <div className="flex items-start gap-4">
                 <div className="w-16 h-16 rounded-full bg-[#5ba4c7]/10 flex items-center justify-center text-[#5ba4c7] font-bold text-lg">
-                  {selectedBeneficiary.nombre
-                    .split(' ')
-                    .map((n) => n[0])
-                    .slice(0, 2)
-                    .join('')}
+                  {selectedBeneficiary.nombre_completo
+                    ? selectedBeneficiary.nombre_completo.split(' ').map((n) => n[0]).slice(0, 2).join('')
+                    : 'N/A'}
                 </div>
 
                 <div>
-                  <h4 className="text-2xl font-bold text-slate-900">{selectedBeneficiary.nombre}</h4>
+                  <h4 className="text-2xl font-bold text-slate-900">{selectedBeneficiary.nombre_completo}</h4>
+                  <p className="text-slate-500 text-sm mt-1">Identificación: {selectedBeneficiary.identificacion}</p>
+                  <p className="text-slate-500 text-sm mt-1">Correo: {selectedBeneficiary.correo || 'N/A'}</p>
+                  
                   <div className="mt-3 space-y-2">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
                       <Phone size={16} className="text-[#5ba4c7]" />
-                      <span>{selectedBeneficiary.telefono}</span>
+                      <span>{selectedBeneficiary.telefono || 'N/A'}</span>
                     </div>
                     <div className="flex items-start gap-2 text-slate-500 text-sm font-medium">
                       <MapPin size={16} className="text-[#5ba4c7] mt-0.5" />
-                      <span>{selectedBeneficiary.direccion}</span>
+                      <span>{selectedBeneficiary.direccion || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-5">
-                <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-                  <p className="text-sm text-slate-500 font-medium">Préstamos Totales</p>
-                  <p className="text-3xl font-black text-slate-900 mt-2">
-                    {selectedBeneficiary.totalPrestamos}
-                  </p>
-                </div>
+              <div>
+                <h5 className="text-lg font-bold text-slate-900 mb-4">Información de Registro</h5>
 
-                <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-                  <p className="text-sm text-slate-500 font-medium">Préstamos Activos</p>
-                  <p className="text-3xl font-black text-slate-900 mt-2">
-                    {selectedBeneficiary.prestamosActivos}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-                  <p className="text-sm text-slate-500 font-medium">Último Préstamo</p>
-                  <p className="text-sm font-bold text-slate-900 mt-3">
-                    {new Date(selectedBeneficiary.ultimoPrestamo).toLocaleDateString('es-MX')}
-                  </p>
+                <div className="space-y-3">
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                    <p className="text-sm font-medium text-slate-600">
+                      Fecha de alta: <span className="font-bold text-slate-900">{new Date(selectedBeneficiary.fecha_registro).toLocaleString('es-MX')}</span>
+                    </p>
+                  </div>
                 </div>
               </div>
 
               <div>
                 <h5 className="text-lg font-bold text-slate-900 mb-4">Historial de Préstamos</h5>
-
                 <div className="space-y-3">
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-slate-900">Silla de ruedas estándar</span>
-                      <span className="text-xs font-black uppercase tracking-wider text-[#94d6c6]">Activo</span>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Préstamo: 01/03/2026 - Devolución: 01/04/2026
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-slate-900">Muletas de aluminio</span>
-                      <span className="text-xs font-black uppercase tracking-wider text-slate-500">Devuelto</span>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Préstamo: 15/02/2026 - Devolución: 28/02/2026
-                    </p>
-                  </div>
+                  {(() => {
+                    const historial = prestamosData.filter(p => p.id_beneficiario === selectedBeneficiary.id_beneficiario);
+                    if (historial.length === 0) {
+                      return <p className="text-sm text-slate-500 font-medium">No tiene préstamos registrados.</p>;
+                    }
+                    return historial.map((prestamo, index) => (
+                      <div key={index} className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-slate-900">{prestamo.nombre_articulo}</span>
+                          <span className={`text-xs font-black uppercase tracking-wider ${prestamo.estado_prestamo === 'Activo' ? 'text-[#94d6c6]' : 'text-slate-500'}`}>
+                            {prestamo.estado_prestamo}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                          Préstamo: {new Date(prestamo.fecha_prestamo).toLocaleDateString('es-MX')} - Devolución: {new Date(prestamo.fecha_limite_devolucion).toLocaleDateString('es-MX')}
+                        </p>
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
             </div>

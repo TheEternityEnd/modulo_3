@@ -470,6 +470,84 @@ app.get('/reportes/resumen', async (req, res) => {
     }
 });
 
+// ACTIVIDAD RECIENTE (GET /dashboard/actividad)
+app.get('/dashboard/actividad', async (req, res) => {
+    try {
+        const query = `
+            SELECT * FROM (
+                (SELECT 
+                    'prestamo' AS tipo,
+                    p.id_prestamo AS id,
+                    p.fecha_prestamo AS fecha,
+                    i.nombre AS aparato,
+                    b.nombre_completo AS usuario
+                FROM prestamos p
+                JOIN inventario i ON p.id_articulo = i.id_articulo
+                JOIN beneficiarios b ON p.id_beneficiario = b.id_beneficiario
+                ORDER BY p.fecha_prestamo DESC LIMIT 5)
+                UNION ALL
+                (SELECT 
+                    'devolucion' AS tipo,
+                    d.id_devolucion AS id,
+                    d.fecha_devolucion AS fecha,
+                    i.nombre AS aparato,
+                    b.nombre_completo AS usuario
+                FROM devoluciones d
+                JOIN prestamos p ON d.id_prestamo = p.id_prestamo
+                JOIN inventario i ON p.id_articulo = i.id_articulo
+                JOIN beneficiarios b ON p.id_beneficiario = b.id_beneficiario
+                ORDER BY d.fecha_devolucion DESC LIMIT 5)
+            ) as combined_activity
+            ORDER BY fecha DESC
+        `;
+        const resultado = await db.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener la actividad reciente' });
+    }
+});
+
+
+// STOCK CRÍTICO (GET /dashboard/stock-critico)
+app.get('/dashboard/stock-critico', async (req, res) => {
+    try {
+        const query = `
+            SELECT id_articulo, nombre, cantidad_disponible 
+            FROM inventario 
+            WHERE cantidad_disponible <= 2 AND estado_fisico != 'Baja'
+            ORDER BY cantidad_disponible ASC
+        `;
+        const resultado = await db.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener stock crítico' });
+    }
+});
+
+
+// INVENTARIO POR CATEGORÍA (GET /dashboard/inventario-categoria)
+app.get('/dashboard/inventario-categoria', async (req, res) => {
+    try {
+        const query = `
+            SELECT categoria, SUM(cantidad_total) as total
+            FROM inventario
+            WHERE estado_fisico != 'Baja'
+            GROUP BY categoria
+            ORDER BY total DESC
+        `;
+        const resultado = await db.query(query);
+        res.json(resultado.rows.map(row => ({
+            categoria: row.categoria || 'Sin Categoría',
+            total: parseInt(row.total, 10)
+        })));
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener inventario por categoría' });
+    }
+});
+
 // TOP 5 APARATOS MÁS SOLICITADOS (GET /reportes/top-aparatos)
 app.get('/reportes/top-aparatos', async (req, res) => {
     try {

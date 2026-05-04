@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { 
   LayoutDashboard, 
   Package, 
@@ -8,14 +9,14 @@ import {
   BarChart3, 
   UserCircle, 
   LogOut, 
-  Bell,
   Box,
   Wrench,
   AlertTriangle,
   TrendingUp,
-  Sparkles,
   X,
-  History
+  AlertCircle,
+  PhoneCall,
+  UserPlus
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -25,14 +26,77 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [resumen, setResumen] = useState({
+    total_aparatos: 0,
+    total_prestados: 0,
+    en_mantenimiento: 0,
+    devoluciones_atrasadas: 0
+  });
+  const [actividades, setActividades] = useState<any[]>([]);
+  const [stockCritico, setStockCritico] = useState<any[]>([]);
+  const [morosidad, setMorosidad] = useState<any[]>([]);
+  const [userName, setUserName] = useState('');
+  const [userRol, setUserRol] = useState('');
+  const [actividadMensual, setActividadMensual] = useState<any[]>([]);
+  const [inventarioCategoria, setInventarioCategoria] = useState<any[]>([]);
 
-  const activities = [
-    { icon: <ArrowLeftRight size={18} />, title: "Préstamo registrado", subtitle: "Silla de ruedas estándar", user: "María González", time: "Hace 2 horas", iconColor: "bg-blue-50 text-blue-600" },
-    { icon: <RotateCcw size={18} />, title: "Devolución completada", subtitle: "Muletas de aluminio", user: "José Ramírez", time: "Hace 5 horas", iconColor: "bg-emerald-50 text-emerald-600" },
-    { icon: <Package size={18} />, title: "Nuevo aparato", subtitle: "Andadera con ruedas", user: "Admin", time: "Hace 1 día", iconColor: "bg-purple-50 text-purple-600" },
-    { icon: <Wrench size={18} />, title: "Mantenimiento", subtitle: "Silla eléctrica", user: "Taller", time: "Hace 2 días", iconColor: "bg-amber-50 text-amber-600" },
-    { icon: <ArrowLeftRight size={18} />, title: "Préstamo registrado", subtitle: "Bastón de apoyo", user: "Ana López", time: "Hace 3 días", iconColor: "bg-blue-50 text-blue-600" },
-  ];
+  useEffect(() => {
+    // Cargar datos de usuario del localStorage
+    const userStr = localStorage.getItem('usuario');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setUserName(user.nombre.split(' ')[0]);
+        setUserRol(user.rol);
+      } catch (e) {
+        console.error("Error al parsear usuario:", e);
+      }
+    }
+    fetch('http://localhost:3000/reportes/resumen')
+      .then(res => res.json())
+      .then(data => setResumen(data))
+      .catch(err => console.error("Error fetching resumen:", err));
+
+    fetch('http://localhost:3000/dashboard/actividad')
+      .then(res => res.json())
+      .then(data => setActividades(data))
+      .catch(err => console.error("Error fetching actividad:", err));
+
+    fetch('http://localhost:3000/dashboard/stock-critico')
+      .then(res => res.json())
+      .then(data => setStockCritico(data))
+      .catch(err => console.error("Error fetching stock critico:", err));
+
+    fetch('http://localhost:3000/reportes/morosidad')
+      .then(res => res.json())
+      .then(data => setMorosidad(data))
+      .catch(err => console.error("Error fetching morosidad:", err));
+
+    fetch('http://localhost:3000/reportes/prestamos-mes')
+      .then(res => res.json())
+      .then(data => {
+        // Formatear meses de YYYY-MM a un nombre corto
+        const formattedData = data.map((d: any) => {
+          const date = new Date(d.mes + '-01T00:00:00');
+          return {
+            mes: date.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase(),
+            total: d.total_prestamos
+          };
+        });
+        setActividadMensual(formattedData);
+      })
+      .catch(err => console.error("Error fetching actividad mensual:", err));
+
+    fetch('http://localhost:3000/dashboard/inventario-categoria')
+      .then(res => res.json())
+      .then(data => setInventarioCategoria(data))
+      .catch(err => console.error("Error fetching inventario categoria:", err));
+  }, []);
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <div className="flex h-screen bg-[#f3f4f6] font-sans relative overflow-hidden text-slate-900">
@@ -58,12 +122,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
 
         <div className="mt-auto pt-8 border-t border-white/10 flex flex-col gap-4">
           <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/10 backdrop-blur-sm">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              JD
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shadow-sm uppercase">
+              {userName ? userName.charAt(0) : 'U'}
             </div>
             <div>
-              <p className="text-sm font-bold text-white">Juan Delgado</p>
-              <p className="text-[10px] text-white/70 font-medium">Administrador</p>
+              <p className="text-sm font-bold text-white">{userName || 'Usuario'}</p>
+              <p className="text-[10px] text-white/70 font-medium capitalize">{userRol || 'Administrador'}</p>
             </div>
           </div>
           <button 
@@ -78,9 +142,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto h-full scroll-smooth">
-        <header className="h-24 bg-transparent flex items-center justify-between px-12 sticky top-0 z-20">
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Dashboard</h1>
+        <header className="h-24 bg-[#f3f4f6]/80 backdrop-blur-md flex items-center justify-between px-12 sticky top-0 z-20">
+          <div className="flex items-center gap-8">
+            <div>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Hola de nuevo, {userName || 'Usuario'}</h1>
+              <p className="text-sm font-bold text-slate-500 mt-1">Aquí tienes el resumen de hoy.</p>
+            </div>
+            {/* Minigráfica Sparkline */}
+            <div className="hidden lg:flex flex-col gap-1 items-start justify-center pl-8 border-l border-slate-200 h-10">
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Actividad Semanal</span>
+              <svg width="60" height="16" viewBox="0 0 60 16" className="overflow-visible mt-0.5">
+                <path d="M0,12 Q10,14 15,8 T30,10 T45,4 T60,2" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" />
+                <circle cx="60" cy="2" r="2.5" fill="#10b981" className="animate-pulse" />
+              </svg>
+            </div>
           </div>
           <div className="flex items-center gap-6">
             <div className="relative">
@@ -108,12 +183,100 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
         </header>
 
         <div className="px-12 pb-12 space-y-8">
+          {/* Accesos Rápidos */}
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => onNavigate('prestamos')} 
+              className="flex items-center gap-3 px-6 py-5 bg-[#5ba4c7] hover:bg-[#4a8eb0] text-white rounded-[24px] shadow-lg shadow-[#5ba4c7]/30 transition-all font-black text-sm flex-1 justify-center hover:-translate-y-1"
+            >
+              <ArrowLeftRight size={22} />
+              Registrar Préstamo
+            </button>
+            <button 
+              onClick={() => onNavigate('devoluciones')} 
+              className="flex items-center gap-3 px-6 py-5 bg-[#94d6c6] hover:bg-[#7bc2b1] text-slate-800 rounded-[24px] shadow-lg shadow-[#94d6c6]/30 transition-all font-black text-sm flex-1 justify-center hover:-translate-y-1"
+            >
+              <RotateCcw size={22} />
+              Recibir Devolución
+            </button>
+            <button 
+              onClick={() => onNavigate('beneficiarios')} 
+              className="flex items-center gap-3 px-6 py-5 bg-[#ff8a71] hover:bg-[#e6755e] text-white rounded-[24px] shadow-lg shadow-[#ff8a71]/30 transition-all font-black text-sm flex-1 justify-center hover:-translate-y-1"
+            >
+              <UserPlus size={22} />
+              Nuevo Beneficiario
+            </button>
+          </div>
+
           {/* Stats Grid */}
           <div className="grid grid-cols-4 gap-8">
-            <StatCard icon={<Box size={24} />} iconColor="bg-white/20" value="42" label="Aparatos Disponibles" trend="+5 este mes" bgColor="bg-[#94d6c6]" />
-            <StatCard icon={<ArrowLeftRight size={24} />} iconColor="bg-white/20" value="28" label="Aparatos Prestados" trend="15 activos" bgColor="bg-[#ffe4c4]" />
-            <StatCard icon={<Wrench size={24} />} iconColor="bg-white/20" value="7" label="En Mantenimiento" trend="3 por reparar" bgColor="bg-[#ff8a71]" />
-            <StatCard icon={<AlertTriangle size={24} />} iconColor="bg-white/20" value="3" label="Préstamos Vencidos" trend="Requiere atención" bgColor="bg-[#ffcc6f]" />
+            <StatCard icon={<Box size={24} />} iconColor="bg-white/20" value={resumen.total_aparatos.toString()} label="Total Aparatos" trend="En inventario" bgColor="bg-[#94d6c6]" />
+            <StatCard icon={<ArrowLeftRight size={24} />} iconColor="bg-white/20" value={resumen.total_prestados.toString()} label="Préstamos Activos" trend="En uso actualmente" bgColor="bg-[#ffe4c4]" />
+            <StatCard icon={<Wrench size={24} />} iconColor="bg-white/20" value={resumen.en_mantenimiento.toString()} label="En Mantenimiento" trend="En reparación" bgColor="bg-[#ff8a71]" />
+            <StatCard icon={<AlertTriangle size={24} />} iconColor="bg-white/20" value={resumen.devoluciones_atrasadas.toString()} label="Devoluciones Atrasadas" trend="Requieren atención" bgColor="bg-[#ffcc6f]" />
+          </div>
+
+          {/* Alertas Operativas */}
+          <div className="grid grid-cols-2 gap-8">
+            {/* Stock Crítico */}
+            <div className="bg-white p-8 rounded-[40px] shadow-sm space-y-6 border border-rose-100 relative overflow-hidden z-0">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-bl-full -z-10"></div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Stock Crítico</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Aparatos por agotarse</p>
+                </div>
+                <div className="p-2 bg-rose-100 rounded-xl">
+                  <AlertCircle size={18} className="text-rose-500" />
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {stockCritico.length > 0 ? stockCritico.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100/50">
+                    <p className="text-sm font-bold text-slate-800">{item.nombre}</p>
+                    <div className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${item.cantidad_disponible === 0 ? 'bg-rose-100 text-rose-600' : 'bg-orange-100 text-orange-600'}`}>
+                      {item.cantidad_disponible} disp.
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-sm text-slate-500 font-medium">No hay aparatos con stock crítico.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Morosidad Inmediata */}
+            <div className="bg-white p-8 rounded-[40px] shadow-sm space-y-6 border border-amber-100 relative overflow-hidden z-0">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-bl-full -z-10"></div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Aviso de Morosidad</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Devoluciones vencidas</p>
+                </div>
+                <div className="p-2 bg-amber-100 rounded-xl">
+                  <PhoneCall size={18} className="text-amber-500" />
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {morosidad.length > 0 ? morosidad.slice(0, 5).map((item, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100/50">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{item.beneficiario}</p>
+                      <p className="text-xs text-slate-500 font-medium">{item.aparato}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="px-3 py-1 bg-rose-100 text-rose-600 rounded-md text-[10px] font-black uppercase tracking-widest mb-1">
+                        -{item.dias_retraso} días
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold">{item.telefono}</p>
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-sm text-slate-500 font-medium">No hay devoluciones vencidas.</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-8">
@@ -129,56 +292,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
                 </div>
               </div>
               
-              <div className="h-48 relative mt-2">
-                {/* SVG for Line Chart matching the requested design */}
-                <svg className="w-full h-full" viewBox="0 0 600 200" preserveAspectRatio="none">
-                  {/* Grid Lines */}
-                  {[0, 50, 100, 150, 200].map((y) => (
-                    <line key={y} x1="0" y1={y} x2="600" y2={y} stroke="#f1f5f9" strokeWidth="1" />
-                  ))}
-                  
-                  {/* Area Fill */}
-                  <path 
-                    d="M0,150 C100,130 150,100 200,100 C300,100 350,140 400,140 C450,140 500,80 600,80 V200 H0 Z" 
-                    fill="url(#emerald-gradient)" 
-                    fillOpacity="0.1"
-                  />
-                  
-                  {/* Line (Spline) */}
-                  <path 
-                    d="M0,150 C100,130 150,100 200,100 C300,100 350,140 400,140 C450,140 500,80 600,80" 
-                    fill="none" 
-                    stroke="#10b981" 
-                    strokeWidth="4" 
-                    strokeLinecap="round"
-                  />
-                  
-                  <defs>
-                    <linearGradient id="emerald-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#10b981" />
-                      <stop offset="100%" stopColor="transparent" />
-                    </linearGradient>
-                  </defs>
-                  
-                  {/* Points (Circles) */}
-                  {[
-                    { x: 0, y: 150 },
-                    { x: 120, y: 130 },
-                    { x: 240, y: 100 },
-                    { x: 360, y: 140 },
-                    { x: 480, y: 80 },
-                    { x: 600, y: 100 }
-                  ].map((p, i) => (
-                    <circle key={i} cx={p.x} cy={p.y} r="5" fill="white" stroke="#10b981" strokeWidth="3" />
-                  ))}
-                </svg>
-                
-                {/* Labels */}
-                <div className="flex justify-between mt-4 px-2">
-                  {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'].map((m, i) => (
-                    <span key={i} className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{m}</span>
-                  ))}
-                </div>
+              <div className="h-48 relative mt-2 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={actividadMensual.length > 0 ? actividadMensual : [{ mes: 'Sin datos', total: 0 }]} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="emerald-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 900 }} dy={10} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }}
+                      itemStyle={{ color: '#10b981', fontWeight: 'black' }}
+                    />
+                    <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#emerald-gradient)" activeDot={{ r: 6, strokeWidth: 0, fill: '#10b981' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
@@ -195,18 +326,30 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
               </div>
               
               <div className="h-48 flex items-end justify-between gap-4 px-2">
-                {[
-                  { h: 15, label: 'Sillas de ruedas', color: 'bg-[#5ba4c7]' },
-                  { h: 22, label: 'Muletas', color: 'bg-[#94d6c6]' },
-                  { h: 18, label: 'Andaderas', color: 'bg-[#ffe4c4]' },
-                  { h: 30, label: 'Bastones', color: 'bg-[#ff8a71]' },
-                  { h: 12, label: 'Otros', color: 'bg-[#ffcc6f]' }
-                ].map((item, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
-                    <div className={`w-full ${item.color} rounded-xl shadow-lg shadow-black/5 transition-all group-hover:opacity-80`} style={{ height: `${item.h * 4.5}px` }}></div>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center leading-tight h-6 flex items-center">{item.label}</span>
+                {inventarioCategoria.length > 0 ? (() => {
+                  const maxTotal = Math.max(...inventarioCategoria.map(i => i.total));
+                  const colors = ['bg-[#5ba4c7]', 'bg-[#94d6c6]', 'bg-[#ffe4c4]', 'bg-[#ff8a71]', 'bg-[#ffcc6f]'];
+                  
+                  return inventarioCategoria.slice(0, 5).map((item, i) => {
+                    const heightPercent = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-3 group h-full justify-end">
+                        <span className="text-[10px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">{item.total}</span>
+                        <div 
+                          className={`w-full ${colors[i % colors.length]} rounded-xl shadow-lg shadow-black/5 transition-all group-hover:opacity-80`} 
+                          style={{ height: `${Math.max(heightPercent, 10)}%` }}
+                        ></div>
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center leading-tight h-8 flex items-center line-clamp-2" title={item.categoria}>
+                          {item.categoria}
+                        </span>
+                      </div>
+                    );
+                  });
+                })() : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <p className="text-sm font-medium text-slate-400">Sin datos de categorías</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
 <link rel="icon" type="image/png" href="/src/assets/logo.png" />          </div>
@@ -227,16 +370,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
               </div>
 
               <div className="space-y-4">
-                {activities.slice(0, 4).map((activity, index) => (
+                {actividades.slice(0, 5).map((activity, index) => (
                   <div key={index} className="flex items-center justify-between py-2 group cursor-pointer">
                     <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full ${index % 2 === 0 ? 'bg-rose-400' : 'bg-slate-300'}`}></div>
+                      <div className={`w-3 h-3 rounded-full ${activity.tipo === 'prestamo' ? 'bg-blue-400' : 'bg-emerald-400'}`}></div>
                       <div>
-                        <p className="text-sm font-bold text-slate-700">{activity.user.toLowerCase()}@fundacion.org</p>
+                        <p className="text-sm font-bold text-slate-700">{activity.usuario}</p>
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-slate-900 flex-1 px-12">{activity.title}</p>
-                    <div className="px-4 py-1.5 bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-amber-100">Abierto</div>
+                    <p className="text-sm font-bold text-slate-900 flex-1 px-12">
+                      {activity.tipo === 'prestamo' ? 'Préstamo: ' : 'Devolución: '} {activity.aparato}
+                    </p>
+                    <div className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-md border ${
+                      activity.tipo === 'prestamo' 
+                        ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                        : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                    }`}>
+                      {formatTime(activity.fecha)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -249,14 +400,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
               </div>
               
               <div className="space-y-6">
-                {activities.slice(0, 7).map((activity, index) => (
+                {actividades.slice(0, 7).map((activity, index) => (
                   <div key={index} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
-                      <p className="text-sm font-bold text-slate-900 truncate w-32">{activity.user}</p>
+                      <p className="text-sm font-bold text-slate-900 truncate w-32">{activity.usuario}</p>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="px-2 py-1 bg-rose-100 text-rose-500 text-[8px] font-black uppercase tracking-widest rounded">PRO</div>
-                      <p className="text-sm font-black text-slate-900">+$49</p>
+                      <div className={`px-2 py-1 text-[8px] font-black uppercase tracking-widest rounded ${
+                        activity.tipo === 'prestamo' ? 'bg-blue-100 text-blue-500' : 'bg-emerald-100 text-emerald-500'
+                      }`}>
+                        {activity.tipo === 'prestamo' ? 'PRE' : 'DEV'}
+                      </div>
+                      <p className="text-sm font-black text-slate-900 truncate w-32 text-right" title={activity.aparato}>{activity.aparato}</p>
                     </div>
                   </div>
                 ))}
@@ -283,8 +438,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigate }) => {
             </div>
             <div className="p-8 overflow-y-auto">
               <div className="space-y-4">
-                {activities.map((activity, index) => (
-                  <ActivityItem key={index} {...activity} />
+                {actividades.map((activity, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 rounded-[24px] hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white ${
+                        activity.tipo === 'prestamo' ? 'bg-blue-400' : 'bg-emerald-400'
+                      }`}>
+                        {activity.tipo === 'prestamo' ? 'P' : 'D'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-900">
+                          {activity.tipo === 'prestamo' ? 'Préstamo' : 'Devolución'}
+                        </p>
+                        <p className="text-xs text-slate-500 font-bold">{activity.usuario} - {activity.aparato}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400 font-bold">{formatTime(activity.fecha)}</p>
+                  </div>
                 ))}
               </div>
             </div>
@@ -317,21 +487,6 @@ const StatCard = ({ value, label, icon, iconColor, trend, bgColor }: any) => (
       <p className="text-sm font-bold text-slate-900/60 mt-1">{label}</p>
       <p className="text-[10px] font-black mt-3 uppercase tracking-widest text-slate-900/40">{trend}</p>
     </div>
-  </div>
-);
-
-const ActivityItem = ({ title, user, time }: any) => (
-  <div className="flex items-center justify-between p-4 rounded-[24px] hover:bg-slate-50 transition-colors">
-    <div className="flex items-center gap-4">
-      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-400">
-        {user.charAt(0)}
-      </div>
-      <div>
-        <p className="text-sm font-black text-slate-900">{title}</p>
-        <p className="text-xs text-slate-500 font-bold">{user}</p>
-      </div>
-    </div>
-    <p className="text-xs text-slate-400 font-bold">{time}</p>
   </div>
 );
 

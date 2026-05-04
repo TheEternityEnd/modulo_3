@@ -48,6 +48,9 @@ const Prestamos: React.FC<PrestamosProps> = ({ onLogout, onNavigate }) => {
   const [isBeneficiaryModalOpen, setIsBeneficiaryModalOpen] = useState(false);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<number | null>(null);
 
+  const [userName, setUserName] = useState('');
+  const [userRol, setUserRol] = useState('');
+
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
@@ -115,6 +118,16 @@ const Prestamos: React.FC<PrestamosProps> = ({ onLogout, onNavigate }) => {
   };
 
   useEffect(() => {
+    const userStr = localStorage.getItem('usuario');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setUserName(user.nombre.split(' ')[0]);
+        setUserRol(user.rol);
+      } catch (e) {
+        console.error("Error al parsear usuario:", e);
+      }
+    }
     fetchDatos();
   }, []);
 
@@ -216,12 +229,12 @@ const Prestamos: React.FC<PrestamosProps> = ({ onLogout, onNavigate }) => {
 
         <div className="mt-auto pt-8 border-t border-white/10 flex flex-col gap-4">
           <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/10 backdrop-blur-sm">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              JD
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shadow-sm uppercase">
+              {userName ? userName.charAt(0) : 'U'}
             </div>
             <div>
-              <p className="text-sm font-bold text-white">Juan Delgado</p>
-              <p className="text-[10px] text-white/70 font-medium">Administrador</p>
+              <p className="text-sm font-bold text-white">{userName || 'Usuario'}</p>
+              <p className="text-[10px] text-white/70 font-medium capitalize">{userRol || 'Administrador'}</p>
             </div>
           </div>
           <button 

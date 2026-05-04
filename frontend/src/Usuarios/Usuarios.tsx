@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Package,
@@ -18,6 +18,8 @@ import {
   Pencil,
   Trash2,
   CircleOff,
+  KeyRound,
+  Activity
 } from 'lucide-react';
 
 interface UsuariosProps {
@@ -26,62 +28,177 @@ interface UsuariosProps {
 }
 
 interface Usuario {
-  id: number;
+  id_usuario: number;
   nombre: string;
   correo: string;
-  rol: 'Administrador' | 'Encargado';
-  estado: 'Activo' | 'Inactivo';
-  ultimoAcceso: string;
+  rol: string;
+  activo: boolean;
+  ultimoAcceso?: string;
 }
 
 const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const usuariosData: Usuario[] = [
-    {
-      id: 1,
-      nombre: 'Juan Delgado Rodríguez',
-      correo: 'juan.delgado@ejemplo.com',
-      rol: 'Administrador',
-      estado: 'Activo',
-      ultimoAcceso: '8/3/2026',
-    },
-    {
-      id: 2,
-      nombre: 'María López Sánchez',
-      correo: 'maria.lopez@ejemplo.com',
-      rol: 'Encargado',
-      estado: 'Activo',
-      ultimoAcceso: '7/3/2026',
-    },
-    {
-      id: 3,
-      nombre: 'Pedro García Martínez',
-      correo: 'pedro.garcia@ejemplo.com',
-      rol: 'Encargado',
-      estado: 'Activo',
-      ultimoAcceso: '6/3/2026',
-    },
-    {
-      id: 4,
-      nombre: 'Laura Torres Méndez',
-      correo: 'laura.torres@ejemplo.com',
-      rol: 'Encargado',
-      estado: 'Inactivo',
-      ultimoAcceso: '14/2/2026',
-    },
-  ];
+  const [usuariosData, setUsuariosData] = useState<Usuario[]>([]);
+  const [nombre, setNombre] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [password, setPassword] = useState('');
+  const [rol, setRol] = useState('operador');
+  
+  const [filterRol, setFilterRol] = useState('Todos');
+  const [filterEstado, setFilterEstado] = useState('Todos');
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [selectedUserName, setSelectedUserName] = useState('');
+  
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [activityData, setActivityData] = useState<{prestamos_mes: number, devoluciones_mes: number} | null>(null);
+
+  const currentUserString = localStorage.getItem('usuario');
+  const currentUser = currentUserString ? JSON.parse(currentUserString) : null;
+  const isOperador = currentUser?.rol === 'operador';
+
+  const toggleEstado = async (id: number, currentActivo: boolean) => {
+    try {
+      const res = await fetch(`http://localhost:3000/usuarios/${id}/estado`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo: !currentActivo }),
+      });
+      if (res.ok) {
+        fetchUsuarios();
+      } else {
+        alert('Error al actualizar el estado');
+      }
+    } catch (error) {
+      console.error('Error al actualizar:', error);
+    }
+  };
+
+  const fetchUsuarios = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/usuarios');
+      if (res.ok) {
+        const data = await res.json();
+        setUsuariosData(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsuarios();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = isEditing ? `http://localhost:3000/usuarios/${editingUserId}` : 'http://localhost:3000/registro';
+      const method = isEditing ? 'PUT' : 'POST';
+      const body = isEditing 
+        ? { nombre, correo, rol } 
+        : { nombre, correo, password, rol };
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        setIsModalOpen(false);
+        fetchUsuarios();
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error al guardar:', error);
+    }
+  };
+
+  const openNewUserModal = () => {
+    setIsEditing(false);
+    setEditingUserId(null);
+    setNombre('');
+    setCorreo('');
+    setPassword('');
+    setRol('operador');
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (user: Usuario) => {
+    setIsEditing(true);
+    setEditingUserId(user.id_usuario);
+    setNombre(user.nombre);
+    setCorreo(user.correo);
+    setPassword('');
+    setRol(user.rol);
+    setIsModalOpen(true);
+  };
+
+  const openPasswordReset = (user: Usuario) => {
+    setEditingUserId(user.id_usuario);
+    setSelectedUserName(user.nombre);
+    setNewPassword('');
+    setIsPasswordModalOpen(true);
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`http://localhost:3000/usuarios/${editingUserId}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      if (res.ok) {
+        setIsPasswordModalOpen(false);
+        alert('Contraseña actualizada exitosamente');
+      } else {
+        alert('Error al actualizar la contraseña');
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const openActivityLog = async (user: Usuario) => {
+    setSelectedUserName(user.nombre);
+    try {
+      const res = await fetch(`http://localhost:3000/usuarios/${user.id_usuario}/actividad`);
+      if (res.ok) {
+        const data = await res.json();
+        setActivityData(data);
+        setIsActivityModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching activity:', error);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     return usuariosData.filter(
-      (user) =>
-        user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.correo.toLowerCase().includes(searchTerm.toLowerCase())
+      (user) => {
+        const matchesSearch = user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              user.correo.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesRol = filterRol === 'Todos' || user.rol === filterRol;
+        const matchesEstado = filterEstado === 'Todos' 
+          ? true 
+          : (filterEstado === 'Activos' ? user.activo : !user.activo);
+          
+        return matchesSearch && matchesRol && matchesEstado;
+      }
     );
-  }, [searchTerm]);
+  }, [searchTerm, usuariosData, filterRol, filterEstado]);
 
-  const activos = usuariosData.filter((u) => u.estado === 'Activo').length;
+  const activos = usuariosData.filter((u) => u.activo).length;
   const total = usuariosData.length;
 
   return (
@@ -108,12 +225,12 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
 
         <div className="mt-auto pt-8 border-t border-white/10 flex flex-col gap-4">
           <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-white/10 backdrop-blur-sm">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              JD
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shadow-sm uppercase">
+              {currentUser?.nombre ? currentUser.nombre.split(' ')[0].charAt(0) : 'U'}
             </div>
             <div>
-              <p className="text-sm font-bold text-white">Juan Delgado</p>
-              <p className="text-[10px] text-white/70 font-medium">Administrador</p>
+              <p className="text-sm font-bold text-white">{currentUser?.nombre ? currentUser.nombre.split(' ')[0] : 'Usuario'}</p>
+              <p className="text-[10px] text-white/70 font-medium capitalize">{currentUser?.rol || 'Administrador'}</p>
             </div>
           </div>
           <button
@@ -148,18 +265,20 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
               </p>
             </div>
 
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
-            >
-              <Plus size={18} />
-              <span>Nuevo Usuario</span>
-            </button>
+            {!isOperador && (
+              <button
+                onClick={openNewUserModal}
+                className="bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
+              >
+                <Plus size={18} />
+                <span>Nuevo Usuario</span>
+              </button>
+            )}
           </div>
 
           {/* Search + Active Users */}
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
-            <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center">
+            <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
               <div className="relative w-full">
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={22} />
                 <input
@@ -169,6 +288,26 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/5 focus:border-[#5ba4c7]/50 transition-all text-base"
                 />
+              </div>
+              <div className="flex w-full md:w-auto gap-4">
+                <select 
+                  value={filterRol} 
+                  onChange={(e) => setFilterRol(e.target.value)}
+                  className="w-full md:w-auto px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#5ba4c7]/50 font-medium text-slate-600"
+                >
+                  <option value="Todos">Todos los Roles</option>
+                  <option value="admin">Administradores</option>
+                  <option value="operador">Operadores</option>
+                </select>
+                <select 
+                  value={filterEstado} 
+                  onChange={(e) => setFilterEstado(e.target.value)}
+                  className="w-full md:w-auto px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#5ba4c7]/50 font-medium text-slate-600"
+                >
+                  <option value="Todos">Todos los Estados</option>
+                  <option value="Activos">Activos</option>
+                  <option value="Inactivos">Inactivos</option>
+                </select>
               </div>
             </div>
 
@@ -232,7 +371,7 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Rol</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Estado</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Último Acceso</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Acciones</th>
+                    {!isOperador && <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Acciones</th>}
                   </tr>
                 </thead>
 
@@ -245,7 +384,7 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
                       .join('');
 
                     return (
-                      <tr key={user.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50 transition-colors">
+                      <tr key={user.id_usuario} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-[#5ba4c7]/10 text-[#5ba4c7] font-bold text-xs flex items-center justify-center">
@@ -260,7 +399,7 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
                         <td className="px-6 py-5">
                           <span
                             className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                              user.rol === 'Administrador'
+                              user.rol === 'admin'
                                 ? 'bg-[#ffe4c4] text-slate-900 border-[#ffe4c4]/50'
                                 : 'bg-[#ff8a71] text-white border-[#ff8a71]/50'
                             }`}
@@ -272,38 +411,44 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
                         <td className="px-6 py-5">
                           <span
                             className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                              user.estado === 'Activo'
+                              user.activo
                                 ? 'bg-[#94d6c6] text-slate-900 border-[#94d6c6]/50'
                                 : 'bg-slate-100 text-slate-500 border-slate-200'
                             }`}
                           >
-                            {user.estado}
+                            {user.activo ? 'Activo' : 'Inactivo'}
                           </span>
                         </td>
 
-                        <td className="px-6 py-5 text-sm text-slate-600">{user.ultimoAcceso}</td>
+                        <td className="px-6 py-5 text-sm text-slate-600">{user.ultimoAcceso || 'N/A'}</td>
 
-                        <td className="px-6 py-5">
-                          <div className="flex items-center justify-center gap-3">
-                            <button className="text-[#5ba4c7] hover:bg-[#5ba4c7]/10 p-2 rounded-lg transition-colors" title="Editar">
-                              <Pencil size={16} />
-                            </button>
-
-                            {user.estado === 'Activo' ? (
-                              <button className="text-[#ffcc6f] hover:bg-[#ffcc6f]/10 p-2 rounded-lg transition-colors" title="Desactivar">
-                                <CircleOff size={16} />
+                        {!isOperador && (
+                          <td className="px-6 py-5">
+                            <div className="flex items-center justify-center gap-3">
+                              <button onClick={() => openEditModal(user)} className="text-[#5ba4c7] hover:bg-[#5ba4c7]/10 p-2 rounded-lg transition-colors" title="Editar">
+                                <Pencil size={16} />
                               </button>
-                            ) : (
-                              <button className="text-[#94d6c6] hover:bg-[#94d6c6]/10 p-2 rounded-lg transition-colors" title="Activar">
-                                <CheckCircle2 size={16} />
+                              
+                              <button onClick={() => openActivityLog(user)} className="text-[#94d6c6] hover:bg-[#94d6c6]/10 p-2 rounded-lg transition-colors" title="Bitácora de Actividad">
+                                <Activity size={16} />
                               </button>
-                            )}
+                              
+                              <button onClick={() => openPasswordReset(user)} className="text-[#ff8a71] hover:bg-[#ff8a71]/10 p-2 rounded-lg transition-colors" title="Restablecer Contraseña">
+                                <KeyRound size={16} />
+                              </button>
 
-                            <button className="text-[#ff8a71] hover:bg-[#ff8a71]/10 p-2 rounded-lg transition-colors" title="Eliminar">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
+                              {user.activo ? (
+                                <button onClick={() => toggleEstado(user.id_usuario, user.activo)} className="text-[#ffcc6f] hover:bg-[#ffcc6f]/10 p-2 rounded-lg transition-colors" title="Desactivar">
+                                  <CircleOff size={16} />
+                                </button>
+                              ) : (
+                                <button onClick={() => toggleEstado(user.id_usuario, user.activo)} className="text-[#94d6c6] hover:bg-[#94d6c6]/10 p-2 rounded-lg transition-colors" title="Activar">
+                                  <CheckCircle2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -324,65 +469,76 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
 
           <div className="relative bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden">
             <div className="p-8 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-900">Nuevo Usuario</h3>
+              <h3 className="text-xl font-bold text-slate-900">{isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}</h3>
               <p className="text-sm text-slate-500 font-medium mt-1">
-                Registra un nuevo usuario dentro del sistema
+                {isEditing ? 'Actualiza los datos del usuario en el sistema' : 'Registra un nuevo usuario dentro del sistema'}
               </p>
             </div>
 
-            <form
+              <form
               className="p-8 space-y-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setIsModalOpen(false);
-              }}
+              onSubmit={handleSubmit}
             >
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 ml-1">Nombre completo</label>
                 <input
                   type="text"
                   placeholder="Ej: Juan Delgado Rodríguez"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
                   className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className={`grid ${!isEditing ? 'grid-cols-2' : 'grid-cols-1'} gap-6`}>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 ml-1">Correo electrónico</label>
                   <input
                     type="email"
                     placeholder="usuario@ejemplo.com"
+                    value={correo}
+                    onChange={(e) => setCorreo(e.target.value)}
                     className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
                     required
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Contraseña</label>
-                  <input
-                    type="password"
-                    placeholder="********"
-                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
-                    required
-                  />
-                </div>
+                {!isEditing && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700 ml-1">Contraseña</label>
+                    <input
+                      type="password"
+                      placeholder="********"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 ml-1">Rol</label>
-                  <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all">
-                    <option>Administrador</option>
-                    <option>Encargado</option>
+                  <select 
+                    value={rol}
+                    onChange={(e) => setRol(e.target.value)}
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
+                  >
+                    <option value="admin">Administrador (admin)</option>
+                    <option value="operador">Operador (operador)</option>
                   </select>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 ml-1">Estado</label>
-                  <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all">
+                  <select 
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
+                    disabled
+                  >
                     <option>Activo</option>
-                    <option>Inactivo</option>
                   </select>
                 </div>
               </div>
@@ -404,6 +560,70 @@ const Usuarios: React.FC<UsuariosProps> = ({ onLogout, onNavigate }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Restablecer Contraseña */}
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsPasswordModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden p-8">
+            <h3 className="text-xl font-bold text-slate-900">Restablecer Contraseña</h3>
+            <p className="text-sm text-slate-500 font-medium mt-1 mb-6">
+              Nueva contraseña para {selectedUserName}
+            </p>
+            <form onSubmit={handlePasswordReset} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 ml-1">Nueva Contraseña</label>
+                <input
+                  type="password"
+                  placeholder="********"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all"
+                  required
+                />
+              </div>
+              <div className="flex items-center justify-end gap-4 pt-4">
+                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="px-6 py-3 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-2xl transition-all">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-6 py-3 text-sm font-bold text-white bg-[#ff8a71] hover:bg-[#e0755f] rounded-2xl shadow-lg shadow-[#ff8a71]/30 transition-all active:scale-[0.98]">
+                  Actualizar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Bitácora */}
+      {isActivityModalOpen && activityData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsActivityModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden p-8 text-center">
+            <div className="w-16 h-16 bg-[#94d6c6]/20 text-[#008080] rounded-full flex items-center justify-center mx-auto mb-4">
+              <Activity size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Bitácora de {selectedUserName}</h3>
+            <p className="text-sm text-slate-500 font-medium mt-1 mb-6">
+              Actividad del mes en curso
+            </p>
+            <div className="bg-slate-50 p-6 rounded-2xl mb-6 flex justify-around">
+              <div>
+                <p className="text-3xl font-black text-[#5ba4c7]">{activityData.prestamos_mes}</p>
+                <p className="text-xs font-bold text-slate-500 uppercase mt-1">Préstamos</p>
+              </div>
+              <div className="w-px bg-slate-200"></div>
+              <div>
+                <p className="text-3xl font-black text-[#94d6c6]">{activityData.devoluciones_mes}</p>
+                <p className="text-xs font-bold text-slate-500 uppercase mt-1">Devoluciones</p>
+              </div>
+            </div>
+            <button onClick={() => setIsActivityModalOpen(false)} className="w-full px-6 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all">
+              Cerrar
+            </button>
           </div>
         </div>
       )}

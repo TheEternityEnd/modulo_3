@@ -15,7 +15,7 @@ app.use(express.json());
 
 // RUTA DE REGISTRO (Sign Up)
 app.post('/registro', async (req, res) => {
-    const { nombre, correo, password } = req.body;
+    const { nombre, correo, password, rol } = req.body;
 
     try {
         // 1. Verificar si el usuario ya existe
@@ -30,8 +30,8 @@ app.post('/registro', async (req, res) => {
 
         // 3. Guardar el usuario en la base de datos
         const nuevoUsuario = await db.query(
-            'INSERT INTO usuarios (nombre, correo, password_hash) VALUES ($1, $2, $3) RETURNING id_usuario, nombre, correo',
-            [nombre, correo, passwordHash]
+            'INSERT INTO usuarios (nombre, correo, password_hash, rol) VALUES ($1, $2, $3, $4) RETURNING id_usuario, nombre, correo, rol',
+            [nombre, correo, passwordHash, rol || 'operador']
         );
 
         res.status(201).json({ mensaje: 'Usuario registrado exitosamente', usuario: nuevoUsuario.rows[0] });
@@ -53,6 +53,10 @@ app.post('/login', async (req, res) => {
         }
 
         const usuario = resultado.rows[0];
+
+        if (usuario.activo === false) {
+            return res.status(403).json({ error: 'La cuenta está deshabilitada' });
+        }
 
         // 2. Comparar la contraseña ingresada con la encriptada en la BD
         const passwordValida = await bcrypt.compare(password, usuario.password_hash);
@@ -80,6 +84,108 @@ app.post('/login', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al iniciar sesión' });
+    }
+});
+
+// OBTENER TODOS LOS USUARIOS (GET /usuarios)
+app.get('/usuarios', async (req, res) => {
+    try {
+        const resultado = await db.query('SELECT id_usuario, nombre, correo, rol, activo FROM usuarios ORDER BY id_usuario ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener los usuarios' });
+    }
+});
+
+// ACTUALIZAR USUARIO (PUT /usuarios/:id)
+app.put('/usuarios/:id', async (req, res) => {
+    const { id } = req.params;
+    const { nombre, correo, rol } = req.body;
+    try {
+        const resultado = await db.query(
+            `UPDATE usuarios 
+             SET nombre = COALESCE($1, nombre),
+                 correo = COALESCE($2, correo),
+                 rol = COALESCE($3, rol)
+             WHERE id_usuario = $4 
+             RETURNING id_usuario, nombre, correo, rol, activo`,
+            [nombre, correo, rol, id]
+        );
+
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        res.json({ mensaje: 'Usuario actualizado exitosamente', usuario: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar el usuario' });
+    }
+});
+
+// CAMBIAR ESTADO DE USUARIO (PUT /usuarios/:id/estado)
+app.put('/usuarios/:id/estado', async (req, res) => {
+    const { id } = req.params;
+    const { activo } = req.body;
+    try {
+        const resultado = await db.query(
+            "UPDATE usuarios SET activo = $1 WHERE id_usuario = $2 RETURNING id_usuario, nombre, correo, rol, activo",
+            [activo, id]
+        );
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        res.json({ mensaje: 'Estado actualizado', usuario: resultado.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar el estado del usuario' });
+    }
+});
+
+// RESTABLECER CONTRASEÑA DE USUARIO (PUT /usuarios/:id/password)
+app.put('/usuarios/:id/password', async (req, res) => {
+    const { id } = req.params;
+    const { password } = req.body;
+    try {
+        if (!password) {
+            return res.status(400).json({ error: 'La nueva contraseña es requerida' });
+        }
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        const resultado = await db.query(
+            "UPDATE usuarios SET password_hash = $1 WHERE id_usuario = $2 RETURNING id_usuario",
+            [passwordHash, id]
+        );
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        res.json({ mensaje: 'Contraseña actualizada exitosamente' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar la contraseña' });
+    }
+});
+
+// BITÁCORA DEL USUARIO (GET /usuarios/:id/actividad)
+app.get('/usuarios/:id/actividad', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const prestamosRes = await db.query(
+            "SELECT COUNT(*) AS total FROM prestamos WHERE id_usuario_autoriza = $1 AND EXTRACT(MONTH FROM fecha_prestamo) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM fecha_prestamo) = EXTRACT(YEAR FROM CURRENT_DATE)",
+            [id]
+        );
+        const devolucionesRes = await db.query(
+            "SELECT COUNT(*) AS total FROM devoluciones WHERE id_usuario_recibe = $1 AND EXTRACT(MONTH FROM fecha_devolucion) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM fecha_devolucion) = EXTRACT(YEAR FROM CURRENT_DATE)",
+            [id]
+        );
+        res.json({
+            prestamos_mes: parseInt(prestamosRes.rows[0].total, 10),
+            devoluciones_mes: parseInt(devolucionesRes.rows[0].total, 10)
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener la actividad del usuario' });
     }
 });
 

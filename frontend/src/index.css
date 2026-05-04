@@ -1,0 +1,255 @@
+@import "tailwindcss";
+
+:root {
+  --color-blue-green-50: #edf4f8;
+  --color-blue-green-100: #daeaf1;
+  --color-blue-green-200: #b6d5e2;
+  --color-blue-green-300: #91c0d4;
+  --color-blue-green-400: #6cabc6;
+  --color-blue-green-500: #4796b8;
+  --color-blue-green-600: #397893;
+  --color-blue-green-700: #2b5a6e;
+  --color-blue-green-800: #1d3c49;
+  --color-blue-green-900: #0e1e25;
+  --color-blue-green-950: #0a151a;
+
+  --color-pearl-aqua-50: #edf8f7;
+  --color-pearl-aqua-100: #dbf0ef;
+  --color-pearl-aqua-200: #b6e2e0;
+  --color-pearl-aqua-300: #92d3d0;
+  --color-pearl-aqua-400: #6dc5c0;
+  --color-pearl-aqua-500: #49b6b1;
+  --color-pearl-aqua-600: #3a928d;
+  --color-pearl-aqua-700: #2c6d6a;
+  --color-pearl-aqua-800: #1d4947;
+  --color-pearl-aqua-900: #0f2423;
+  --color-pearl-aqua-950: #0a1a19;
+
+  --color-soft-peach-50: #fff6e5;
+  --color-soft-peach-100: #ffeccc;
+  --color-soft-peach-200: #ffda99;
+  --color-soft-peach-300: #ffc766;
+  --color-soft-peach-400: #ffb433;
+  --color-soft-peach-500: #ffa200;
+  --color-soft-peach-600: #cc8100;
+  --color-soft-peach-700: #996100;
+  --color-soft-peach-800: #664100;
+  --color-soft-peach-900: #332000;
+  --color-soft-peach-950: #241700;
+
+  --color-vibrant-coral-50: #fee9e6;
+  --color-vibrant-coral-100: #fdd3ce;
+  --color-vibrant-coral-200: #fba89d;
+  --color-vibrant-coral-300: #fa7c6b;
+  --color-vibrant-coral-400: #f8503a;
+  --color-vibrant-coral-500: #f62509;
+  --color-vibrant-coral-600: #c51d07;
+  --color-vibrant-coral-700: #941605;
+  --color-vibrant-coral-800: #620f04;
+  --color-vibrant-coral-900: #310702;
+  --color-vibrant-coral-950: #220501;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--color-blue-green-50);
+  color: var(--color-blue-green-900);
+}
+
+body,
+input,
+button,
+select,
+textarea {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+::selection {
+  background-color: rgba(71, 150, 184, 0.25);
+}
+
+.bg-white {
+  background-color: var(--color-pearl-aqua-50) !important;
+}
+.bg-slate-50 {
+  background-color: var(--color-blue-green-50) !important;
+}
+.bg-slate-100 {
+  background-color: var(--color-blue-green-100) !important;
+}
+.bg-slate-200 {
+  background-color: var(--color-blue-green-200) !important;
+}
+.bg-blue-50 {
+  background-color: var(--color-blue-green-100) !important;
+}
+.bg-blue-100 {
+  background-color: var(--color-blue-green-200) !important;
+}
+.bg-blue-500 {
+  background-color: var(--color-blue-green-500) !important;
+}
+.bg-blue-600 {
+  background-color: var(--color-blue-green-600) !important;
+}
+.bg-blue-50 {
+  background-color: var(--color-blue-green-100) !important;
+}
+.bg-blue-500\/20 {
+  background-color: rgba(71, 150, 184, 0.2) !important;
+}
+.bg-blue-500\/40 {
+  background-color: rgba(71, 150, 184, 0.4) !important;
+}
+.hover\:bg-blue-700:hover {
+  background-color: var(--color-blue-green-700) !important;
+}
+.hover\:bg-blue-50:hover,
+.hover\:bg-slate-50:hover {
+  background-color: var(--color-blue-green-100) !important;
+}
+.hover\:bg-slate-50\/50:hover {
+  background-color: rgba(237, 244, 248, 0.5) !important;
+}
+.hover\:bg-slate-100:hover {
+  background-color: var(--color-blue-green-200) !important;
+}
+.hover\:bg-blue-50\/50:hover {
+  background-color: rgba(237, 244, 248, 0.5) !important;
+}
+.text-slate-900 {
+  color: var(--color-blue-green-900) !important;
+}
+.text-slate-800 {
+  color: var(--color-blue-green-950) !important;
+}
+.text-slate-700 {
+  color: var(--color-blue-green-900) !important;
+}
+.text-slate-600 {
+  color: var(--color-blue-green-800) !important;
+}
+.text-slate-500 {
+  color: var(--color-blue-green-700) !important;
+}
+.text-slate-400 {
+  color: var(--color-blue-green-600) !important;
+}
+.text-blue-600,
+.text-blue-500 {
+  color: var(--color-blue-green-600) !important;
+}
+.text-emerald-500,
+.text-emerald-600,
+.text-teal-500 {
+  color: var(--color-pearl-aqua-600) !important;
+}
+.text-rose-500 {
+  color: var(--color-vibrant-coral-500) !important;
+}
+.text-amber-500,
+.text-amber-600 {
+  color: var(--color-soft-peach-600) !important;
+}
+.border-slate-100 {
+  border-color: var(--color-blue-green-200) !important;
+}
+.border-slate-200 {
+  border-color: var(--color-blue-green-300) !important;
+}
+.border-blue-100 {
+  border-color: var(--color-blue-green-200) !important;
+}
+.border-emerald-100 {
+  border-color: var(--color-pearl-aqua-200) !important;
+}
+.border-amber-100 {
+  border-color: var(--color-soft-peach-200) !important;
+}
+.border-sky-100 {
+  border-color: var(--color-blue-green-200) !important;
+}
+.border-blue-100 {
+  border-color: var(--color-blue-green-200) !important;
+}
+.border-emerald-100 {
+  border-color: var(--color-pearl-aqua-200) !important;
+}
+.border-rose-100 {
+  border-color: var(--color-vibrant-coral-100) !important;
+}
+.border-soft-peach-200 {
+  border-color: var(--color-soft-peach-200) !important;
+}
+.bg-soft-peach-50 {
+  background-color: var(--color-soft-peach-50) !important;
+}
+.bg-soft-peach-100 {
+  background-color: var(--color-soft-peach-100) !important;
+}
+.bg-soft-peach-200 {
+  background-color: var(--color-soft-peach-200) !important;
+}
+.bg-pearl-aqua-500 {
+  background-color: var(--color-pearl-aqua-500) !important;
+}
+.text-pearl-aqua-500 {
+  color: var(--color-pearl-aqua-500) !important;
+}
+.bg-vibrant-coral-500 {
+  background-color: var(--color-vibrant-coral-500) !important;
+}
+.text-vibrant-coral-500 {
+  color: var(--color-vibrant-coral-500) !important;
+}
+.text-soft-peach-500 {
+  color: var(--color-soft-peach-500) !important;
+}
+.focus\:ring-blue-500\/10:focus,
+.focus\:ring-blue-500\/20:focus {
+  box-shadow: 0 0 0 4px rgba(71, 150, 184, 0.12) !important;
+}
+.focus\:border-blue-500:focus {
+  border-color: var(--color-blue-green-500) !important;
+}
+.hover\:text-blue-600:hover {
+  color: var(--color-blue-green-600) !important;
+}
+.hover\:bg-blue-100:hover {
+  background-color: var(--color-blue-green-200) !important;
+}
+.hover\:bg-rose-50:hover {
+  background-color: var(--color-vibrant-coral-50) !important;
+}
+.bg-emerald-50 {
+  background-color: var(--color-pearl-aqua-100) !important;
+}
+.bg-emerald-100 {
+  background-color: var(--color-pearl-aqua-200) !important;
+}
+.bg-amber-50 {
+  background-color: var(--color-soft-peach-100) !important;
+}
+.bg-sky-50 {
+  background-color: var(--color-blue-green-100) !important;
+}
+.text-sky-600 {
+  color: var(--color-blue-green-600) !important;
+}
+.text-amber-600 {
+  color: var(--color-soft-peach-600) !important;
+}
+.bg-rose-50 {
+  background-color: var(--color-vibrant-coral-50) !important;
+}
+.shadow-blue-500\/30 {
+  --tw-shadow-color: rgba(71, 150, 184, 0.3) !important;
+}
+.shadow-blue-500\/20 {
+  --tw-shadow-color: rgba(71, 150, 184, 0.2) !important;
+}

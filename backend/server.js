@@ -161,8 +161,48 @@ app.delete('/inventario/:id', async (req, res) => {
 });
 
 // ==========================================
+// RUTAS DE BENEFICIARIOS
+// ==========================================
+
+// OBTENER TODOS LOS BENEFICIARIOS (GET /beneficiarios)
+app.get('/beneficiarios', async (req, res) => {
+    try {
+        const resultado = await db.query('SELECT * FROM beneficiarios ORDER BY id_beneficiario ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener los beneficiarios' });
+    }
+});
+
+// ==========================================
 // RUTAS DE PRÉSTAMOS
 // ==========================================
+
+// OBTENER TODOS LOS PRÉSTAMOS (GET /prestamos)
+app.get('/prestamos', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.id_prestamo,
+                p.fecha_prestamo,
+                p.fecha_limite_devolucion,
+                p.estado_prestamo,
+                p.observaciones,
+                i.nombre AS nombre_articulo,
+                b.nombre_completo AS nombre_beneficiario
+            FROM prestamos p
+            JOIN inventario i ON p.id_articulo = i.id_articulo
+            JOIN beneficiarios b ON p.id_beneficiario = b.id_beneficiario
+            ORDER BY p.fecha_prestamo DESC
+        `;
+        const resultado = await db.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener los préstamos' });
+    }
+});
 
 app.post('/prestamos', async (req, res) => {
     // La base de datos asume 1 artículo por registro de préstamo, así que se restará 1 unidad.
@@ -195,6 +235,36 @@ app.post('/prestamos', async (req, res) => {
         res.status(400).json({ error: error.message || 'Error al registrar el préstamo' });
     } finally {
         cliente.release(); // Liberar conexión al pool
+    }
+});
+
+// CANCELAR PRÉSTAMO (PUT /prestamos/:id/cancelar)
+app.put('/prestamos/:id/cancelar', async (req, res) => {
+    const { id } = req.params;
+    const cliente = await db.connect();
+    try {
+        await cliente.query('BEGIN'); // Iniciar transacción
+
+        // 1. Verificar si el préstamo está activo
+        const prestamo = await cliente.query('SELECT * FROM prestamos WHERE id_prestamo = $1 AND estado_prestamo = $2', [id, 'Activo']);
+        if (prestamo.rows.length === 0) throw new Error('El préstamo no se encontró o no está Activo');
+
+        const id_articulo = prestamo.rows[0].id_articulo;
+
+        // 2. Cambiar estado a Cancelado
+        await cliente.query("UPDATE prestamos SET estado_prestamo = 'Cancelado' WHERE id_prestamo = $1", [id]);
+
+        // 3. Devolver el stock
+        await cliente.query('UPDATE inventario SET cantidad_disponible = cantidad_disponible + 1 WHERE id_articulo = $1', [id_articulo]);
+
+        await cliente.query('COMMIT');
+        res.json({ mensaje: 'Préstamo cancelado exitosamente' });
+    } catch (error) {
+        await cliente.query('ROLLBACK');
+        console.error(error);
+        res.status(400).json({ error: error.message || 'Error al cancelar el préstamo' });
+    } finally {
+        cliente.release();
     }
 });
 

@@ -356,6 +356,35 @@ app.put('/prestamos/:id/cancelar', async (req, res) => {
 // RUTAS DE DEVOLUCIONES
 // ==========================================
 
+// OBTENER HISTORIAL DE DEVOLUCIONES (GET /devoluciones)
+app.get('/devoluciones', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                d.id_devolucion,
+                d.fecha_devolucion,
+                d.estado_fisico_recibido,
+                d.multa_o_cargo,
+                d.observaciones AS observaciones_devolucion,
+                p.id_prestamo,
+                p.fecha_prestamo,
+                p.fecha_limite_devolucion,
+                i.nombre AS nombre_articulo,
+                b.nombre_completo AS nombre_beneficiario
+            FROM devoluciones d
+            JOIN prestamos p ON d.id_prestamo = p.id_prestamo
+            JOIN inventario i ON p.id_articulo = i.id_articulo
+            JOIN beneficiarios b ON p.id_beneficiario = b.id_beneficiario
+            ORDER BY d.fecha_devolucion DESC
+        `;
+        const resultado = await db.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener las devoluciones' });
+    }
+});
+
 app.post('/devoluciones', async (req, res) => {
     const { id_prestamo, id_usuario_recibe, estado_fisico_recibido, multa_o_cargo, observaciones } = req.body;
 

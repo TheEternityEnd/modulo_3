@@ -18,7 +18,10 @@ import {
   AlertCircle,
   Camera,
   Upload,
-  X
+  X,
+  Download,
+  Printer,
+  FileText
 } from 'lucide-react';
 
 interface DevolucionesProps {
@@ -27,44 +30,92 @@ interface DevolucionesProps {
 }
 
 const Devoluciones: React.FC<DevolucionesProps> = ({ onLogout, onNavigate }) => {
-  const [selectedLoanId, setSelectedLoanId] = useState<string | null>('PR-003');
-  const [fechaDevolucion, setFechaDevolucion] = useState('09/03/2026');
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
+  const [fechaDevolucion, setFechaDevolucion] = useState(new Date().toISOString().split('T')[0]);
   const [estadoAparato, setEstadoAparato] = useState('Bueno - Uso normal');
   const [requiereMantenimiento, setRequiereMantenimiento] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [multaOCargo, setMultaOCargo] = useState('0');
+  const [busquedaHistorial, setBusquedaHistorial] = useState('');
+  const [ticketModal, setTicketModal] = useState<any>(null);
 
   const [fotografiasDanios, setFotografiasDanios] = useState<File[]>([]);
   const [previewFotos, setPreviewFotos] = useState<string[]>([]);
 
   const inputFotosRef = useRef<HTMLInputElement | null>(null);
 
-  const activeLoans = [
-    {
-      id: 'PR-001',
-      beneficiario: 'María González García',
-      aparato: 'Silla de ruedas estándar',
-      fechaPrestamo: '2026-03-01',
-      fechaEsperada: '2026-04-01',
-      cantidad: 1
-    },
-    {
-      id: 'PR-002',
-      beneficiario: 'José Luis Ramírez',
-      aparato: 'Muletas de aluminio',
-      fechaPrestamo: '2026-03-02',
-      fechaEsperada: '2026-04-02',
-      cantidad: 1
-    },
-    {
-      id: 'PR-003',
-      beneficiario: 'Carlos Méndez Pérez',
-      aparato: 'Bastón de apoyo',
-      fechaPrestamo: '2026-03-03',
-      fechaEsperada: '2026-04-03',
-      cantidad: 1
+  const [activeLoans, setActiveLoans] = useState<any[]>([]);
+  const [historialDevoluciones, setHistorialDevoluciones] = useState<any[]>([]);
+
+  const fetchPrestamos = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/prestamos');
+      const data = await response.json();
+      const activos = data.filter((p: any) => p.estado_prestamo === 'Activo');
+      setActiveLoans(activos.map((p: any) => ({
+        id: p.id_prestamo.toString(),
+        beneficiario: p.nombre_beneficiario,
+        aparato: p.nombre_articulo,
+        fechaPrestamo: p.fecha_prestamo,
+        fechaEsperada: p.fecha_limite_devolucion,
+        cantidad: 1
+      })));
+    } catch (error) {
+      console.error('Error fetching prestamos:', error);
     }
-  ];
+  };
+
+  const fetchDevoluciones = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/devoluciones');
+      const data = await response.json();
+      setHistorialDevoluciones(data);
+    } catch (error) {
+      console.error('Error fetching devoluciones:', error);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchPrestamos();
+    fetchDevoluciones();
+  }, []);
+
+  const historialFiltrado = historialDevoluciones.filter(dev => {
+    const texto = busquedaHistorial.toLowerCase();
+    const fechaStr = new Date(dev.fecha_devolucion).toLocaleDateString('es-MX');
+    return (
+      (dev.nombre_beneficiario?.toLowerCase() || '').includes(texto) ||
+      (dev.nombre_articulo?.toLowerCase() || '').includes(texto) ||
+      fechaStr.includes(texto)
+    );
+  });
+
+  const handleExportCSV = () => {
+    const encabezados = ['ID Devolución', 'ID Préstamo', 'Beneficiario', 'Artículo', 'Fecha', 'Estado Físico', 'Multa o Cargo', 'Observaciones'];
+    const filas = historialFiltrado.map(dev => [
+      dev.id_devolucion,
+      dev.id_prestamo,
+      `"${dev.nombre_beneficiario}"`,
+      `"${dev.nombre_articulo}"`,
+      new Date(dev.fecha_devolucion).toLocaleDateString('es-MX'),
+      dev.estado_fisico_recibido,
+      dev.multa_o_cargo,
+      `"${dev.observaciones_devolucion || ''}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + encabezados.join(",") + "\n" 
+      + filas.map(e => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `historial_devoluciones_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const prestamosFiltrados = activeLoans.filter((loan) => {
     const texto = busqueda.toLowerCase();
@@ -137,23 +188,65 @@ const Devoluciones: React.FC<DevolucionesProps> = ({ onLogout, onNavigate }) => 
       return;
     }
 
+    const estadoFisicoDB = estadoAparato.split(' - ')[0];
+
+    if (estadoFisicoDB === 'Dañado' || estadoFisicoDB === 'Inutilizable') {
+      const valorMulta = parseFloat(multaOCargo) || 0;
+      if (valorMulta === 0 && observaciones.trim() === '') {
+        alert('Si el aparato se devuelve con daños, debes registrar una multa/cargo o proporcionar una justificación en observaciones.');
+        return;
+      }
+    }
+
     const datosDevolucion = {
-      prestamo: selectedLoanId,
-      fechaDevolucion,
-      estadoAparato,
-      requiereMantenimiento,
-      observaciones,
-      fotografias: fotografiasDanios.map((foto) => ({
-        nombre: foto.name,
-        tipo: foto.type,
-        tamanio: foto.size
-      }))
+      id_prestamo: parseInt(selectedLoanId, 10),
+      id_usuario_recibe: 1,
+      estado_fisico_recibido: estadoFisicoDB,
+      multa_o_cargo: parseFloat(multaOCargo) || 0,
+      observaciones: observaciones + (requiereMantenimiento ? ' [Requiere mantenimiento]' : '')
     };
 
-    console.log('Datos de devolución:', datosDevolucion);
-    console.log('Archivos de fotos:', fotografiasDanios);
+    try {
+      const response = await fetch('http://localhost:3000/devoluciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datosDevolucion)
+      });
+      
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al registrar la devolución');
+      }
 
-    alert('Devolución registrada correctamente.');
+      alert('Devolución registrada correctamente.');
+      
+      const ticketInfo = {
+        id_devolucion: result.devolucion?.id_devolucion || 'N/A',
+        beneficiario: selectedLoan.beneficiario,
+        aparato: selectedLoan.aparato,
+        fecha: new Date().toLocaleDateString('es-MX'),
+        estadoFisico: estadoFisicoDB,
+        multaOCargo: parseFloat(multaOCargo) || 0,
+        observaciones: observaciones + (requiereMantenimiento ? ' [Requiere mantenimiento]' : '')
+      };
+
+      setTicketModal(ticketInfo);
+      
+      setSelectedLoanId(null);
+      setEstadoAparato('Bueno - Uso normal');
+      setRequiereMantenimiento(false);
+      setObservaciones('');
+      setMultaOCargo('0');
+      limpiarPreviews();
+      setFotografiasDanios([]);
+      setPreviewFotos([]);
+      
+      fetchPrestamos();
+      fetchDevoluciones();
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message);
+    }
   };
 
   return (
@@ -396,12 +489,39 @@ const Devoluciones: React.FC<DevolucionesProps> = ({ onLogout, onNavigate }) => 
                         Fecha de devolución
                       </label>
                       <input
-                        type="text"
+                        type="date"
                         value={fechaDevolucion}
                         onChange={(e) => setFechaDevolucion(e.target.value)}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all font-medium text-slate-800"
                       />
                     </div>
+
+                    {selectedLoan && (() => {
+                      let diasRetraso = 0;
+                      if (selectedLoan.fechaEsperada) {
+                        const devolucionD = new Date(fechaDevolucion + "T00:00:00");
+                        const esperadaD = new Date(selectedLoan.fechaEsperada);
+                        // Reset time to compare only dates
+                        esperadaD.setHours(0, 0, 0, 0);
+                        if (devolucionD > esperadaD) {
+                          const diffTime = Math.abs(devolucionD.getTime() - esperadaD.getTime());
+                          diasRetraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        }
+                      }
+                      
+                      if (diasRetraso > 0) {
+                        return (
+                          <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 text-orange-700 p-4 rounded-xl">
+                            <AlertCircle size={20} className="text-orange-500" />
+                            <div>
+                              <p className="font-bold text-sm">Devolución con {diasRetraso} {diasRetraso === 1 ? 'día' : 'días'} de retraso</p>
+                              <p className="text-xs opacity-80">La fecha límite esperada era el {formatDate(selectedLoan.fechaEsperada)}.</p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
 
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-2">
@@ -414,7 +534,7 @@ const Devoluciones: React.FC<DevolucionesProps> = ({ onLogout, onNavigate }) => 
                       >
                         <option>Bueno - Uso normal</option>
                         <option>Regular - Desgaste visible</option>
-                        <option>Malo - Daños significativos</option>
+                        <option>Dañado - Daños significativos</option>
                         <option>Inutilizable - No apto para préstamo</option>
                       </select>
                     </div>
@@ -442,6 +562,21 @@ const Devoluciones: React.FC<DevolucionesProps> = ({ onLogout, onNavigate }) => 
                           </p>
                         </div>
                       )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                        Multa o Cargo (Opcional)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={multaOCargo}
+                        onChange={(e) => setMultaOCargo(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all font-medium text-slate-800"
+                      />
                     </div>
 
                     <div>
@@ -549,8 +684,142 @@ const Devoluciones: React.FC<DevolucionesProps> = ({ onLogout, onNavigate }) => 
               </div>
             )}
           </div>
+
+          {/* Historial de Devoluciones */}
+          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm mt-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+              <h3 className="text-xl font-black text-slate-900">Historial de Devoluciones</h3>
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Buscar registro..."
+                    value={busquedaHistorial}
+                    onChange={(e) => setBusquedaHistorial(e.target.value)}
+                    className="pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all text-sm font-medium w-64"
+                  />
+                </div>
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-2 bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all"
+                >
+                  <Download size={18} />
+                  <span>Exportar CSV</span>
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 text-sm text-slate-500">
+                    <th className="pb-4 font-bold">ID Devolución</th>
+                    <th className="pb-4 font-bold">Préstamo Ref.</th>
+                    <th className="pb-4 font-bold">Beneficiario</th>
+                    <th className="pb-4 font-bold">Artículo</th>
+                    <th className="pb-4 font-bold">Fecha</th>
+                    <th className="pb-4 font-bold">Estado Físico</th>
+                    <th className="pb-4 font-bold">Multa/Cargo</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {historialFiltrado.map((dev, index) => (
+                    <tr key={index} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 font-bold text-slate-800">{dev.id_devolucion}</td>
+                      <td className="py-4 text-slate-600">{dev.id_prestamo}</td>
+                      <td className="py-4 font-medium text-slate-800">{dev.nombre_beneficiario}</td>
+                      <td className="py-4 text-slate-600">{dev.nombre_articulo}</td>
+                      <td className="py-4 text-slate-600">{new Date(dev.fecha_devolucion).toLocaleDateString('es-MX')}</td>
+                      <td className="py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          dev.estado_fisico_recibido === 'Bueno' ? 'bg-emerald-100 text-emerald-700' :
+                          dev.estado_fisico_recibido === 'Regular' ? 'bg-amber-100 text-amber-700' :
+                          'bg-rose-100 text-rose-700'
+                        }`}>
+                          {dev.estado_fisico_recibido}
+                        </span>
+                      </td>
+                      <td className="py-4 font-medium text-slate-700">${parseFloat(dev.multa_o_cargo || '0').toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  {historialFiltrado.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">No se encontraron devoluciones</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </main>
+
+      {ticketModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl relative">
+            <button 
+              onClick={() => setTicketModal(null)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X size={24} />
+            </button>
+            
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-[#5ba4c7]/10 text-[#5ba4c7] rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900">Ticket de Devolución</h3>
+              <p className="text-slate-500 font-medium mt-1">Comprobante de recepción</p>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-6 space-y-4 mb-8">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                <span className="text-slate-500 text-sm font-bold">ID Devolución</span>
+                <span className="text-slate-900 font-black">{ticketModal.id_devolucion}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                <span className="text-slate-500 text-sm font-bold">Fecha</span>
+                <span className="text-slate-900 font-black">{ticketModal.fecha}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                <span className="text-slate-500 text-sm font-bold">Beneficiario</span>
+                <span className="text-slate-900 font-black text-right">{ticketModal.beneficiario}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                <span className="text-slate-500 text-sm font-bold">Artículo</span>
+                <span className="text-slate-900 font-black text-right">{ticketModal.aparato}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                <span className="text-slate-500 text-sm font-bold">Estado</span>
+                <span className={`font-black ${
+                  ticketModal.estadoFisico === 'Bueno' ? 'text-emerald-600' : 
+                  ticketModal.estadoFisico === 'Regular' ? 'text-amber-600' : 'text-rose-600'
+                }`}>{ticketModal.estadoFisico}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 text-sm font-bold">Multa/Cargo</span>
+                <span className="text-slate-900 font-black">${ticketModal.multaOCargo.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button 
+                onClick={() => window.print()}
+                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-900/20"
+              >
+                <Printer size={20} />
+                <span>Imprimir</span>
+              </button>
+              <button 
+                onClick={() => setTicketModal(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 py-3.5 rounded-xl font-bold transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

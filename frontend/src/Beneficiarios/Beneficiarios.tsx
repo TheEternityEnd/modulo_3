@@ -17,7 +17,10 @@ import {
   X,
   Edit2,
   Trash2,
-  Download
+  Download,
+  Upload,
+  FileText,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface BeneficiariosProps {
@@ -33,7 +36,19 @@ interface Beneficiario {
   correo: string;
   direccion: string;
   fecha_registro: string;
+  identificacion_archivo_nombre?: string;
+  identificacion_archivo_tipo?: string;
+  identificacion_archivo_url?: string;
 }
+interface ArchivoIdentificacion {
+  nombre: string;
+  tipo: string;
+  url: string;
+  
+}
+const TEMP_IDENTIFICACION_URL = '/src/assets/logo.png';
+const TEMP_IDENTIFICACION_NOMBRE = 'identificacion-temporal.png';
+const TEMP_IDENTIFICACION_TIPO = 'image/png';
 
 const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,6 +64,7 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
   const [telefono, setTelefono] = useState('');
   const [correo, setCorreo] = useState('');
   const [direccion, setDireccion] = useState('');
+  const [archivoIdentificacion, setArchivoIdentificacion] = useState<ArchivoIdentificacion | null>(null);
 
   const [userName, setUserName] = useState('');
   const [userRol, setUserRol] = useState('');
@@ -95,19 +111,31 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
     setTelefono('');
     setCorreo('');
     setDireccion('');
+    setArchivoIdentificacion(null);
     setIsModalOpen(true);
   };
 
   const handleEdit = (beneficiario: Beneficiario, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingId(beneficiario.id_beneficiario);
-    setNombreCompleto(beneficiario.nombre_completo || '');
-    setIdentificacion(beneficiario.identificacion || '');
-    setTelefono(beneficiario.telefono || '');
-    setCorreo(beneficiario.correo || '');
-    setDireccion(beneficiario.direccion || '');
-    setIsModalOpen(true);
-  };
+  e.stopPropagation();
+  setEditingId(beneficiario.id_beneficiario);
+  setNombreCompleto(beneficiario.nombre_completo || '');
+  setIdentificacion(beneficiario.identificacion || '');
+  setTelefono(beneficiario.telefono || '');
+  setCorreo(beneficiario.correo || '');
+  setDireccion(beneficiario.direccion || '');
+
+  setArchivoIdentificacion(
+    beneficiario.identificacion_archivo_url
+      ? {
+          nombre: beneficiario.identificacion_archivo_nombre || 'Identificación oficial',
+          tipo: beneficiario.identificacion_archivo_tipo || 'application/pdf',
+          url: beneficiario.identificacion_archivo_url
+        }
+      : null
+  );
+
+  setIsModalOpen(true);
+};
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -152,6 +180,42 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
     link.click();
     document.body.removeChild(link);
   };
+  const handleIdentificacionFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+
+  if (!file) return;
+
+  const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+
+  if (!allowedTypes.includes(file.type)) {
+    alert('Solo se permiten archivos PDF, PNG, JPG o JPEG.');
+    return;
+  }
+
+  const maxSizeMB = 5;
+  const maxSizeBytes = maxSizeMB * 1024 * 1024;
+
+  if (file.size > maxSizeBytes) {
+    alert(`El archivo no debe pesar más de ${maxSizeMB} MB.`);
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onloadend = () => {
+    setArchivoIdentificacion({
+      nombre: file.name,
+      tipo: file.type,
+      url: reader.result as string
+    });
+  };
+
+  reader.readAsDataURL(file);
+};
+
+const handleRemoveIdentificacionFile = () => {
+  setArchivoIdentificacion(null);
+};
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,13 +251,14 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
       });
       if (res.ok) {
         setIsModalOpen(false);
-        setEditingId(null);
-        setNombreCompleto('');
-        setIdentificacion('');
-        setTelefono('');
-        setCorreo('');
-        setDireccion('');
-        fetchBeneficiarios();
+setEditingId(null);
+setNombreCompleto('');
+setIdentificacion('');
+setTelefono('');
+setCorreo('');
+setDireccion('');
+setArchivoIdentificacion(null);
+fetchBeneficiarios();
       } else {
         const errorData = await res.json();
         alert('Error: ' + (errorData.error || 'Error desconocido'));
@@ -215,6 +280,18 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
       );
     });
   }, [searchTerm, beneficiariosData]);
+
+  const getIdentificacionPreview = (beneficiario: Beneficiario) => {
+  return beneficiario.identificacion_archivo_url || TEMP_IDENTIFICACION_URL;
+};
+
+const getIdentificacionNombre = (beneficiario: Beneficiario) => {
+  return beneficiario.identificacion_archivo_nombre || TEMP_IDENTIFICACION_NOMBRE;
+};
+
+const getIdentificacionTipo = (beneficiario: Beneficiario) => {
+  return beneficiario.identificacion_archivo_tipo || TEMP_IDENTIFICACION_TIPO;
+};
 
   return (
     <div className="flex h-screen bg-[#f3f4f6] font-sans relative overflow-hidden text-slate-900">
@@ -429,44 +506,115 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Identificación</label>
-                  <input
-                    type="text"
-                    placeholder="DNI / CURP / INE"
-                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
-                    value={identificacion}
-                    onChange={(e) => setIdentificacion(e.target.value)}
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Teléfono</label>
-                  <input
-                    type="tel"
-                    placeholder="555-1234-5678"
-                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    pattern="[0-9+\-\s()]+"
-                    title="Solo se permiten números, espacios y los símbolos + - ( )"
-                    required
-                  />
-                </div>
+          <div className="grid grid-cols-2 gap-6">
+  <div className="space-y-3">
+    <label className="text-sm font-bold text-slate-700 ml-1">
+      Identificación
+    </label>
 
-                <div className="space-y-2 col-span-2">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Correo electrónico</label>
-                  <input
-                    type="email"
-                    placeholder="correo@ejemplo.com"
-                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
-                    value={correo}
-                    onChange={(e) => setCorreo(e.target.value)}
-                  />
-                </div>
-              </div>
+    <input
+      type="text"
+      placeholder="DNI / CURP / INE"
+      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+      value={identificacion}
+      onChange={(e) => setIdentificacion(e.target.value)}
+      required
+    />
+  </div>
+
+  <div className="space-y-2">
+    <label className="text-sm font-bold text-slate-700 ml-1">
+      Teléfono
+    </label>
+
+    <input
+      type="tel"
+      placeholder="555-1234-5678"
+      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+      value={telefono}
+      onChange={(e) => setTelefono(e.target.value)}
+      pattern="[0-9+\-\s()]+"
+      title="Solo se permiten números, espacios y los símbolos + - ( )"
+      required
+    />
+  </div>
+
+  <div className="space-y-3 col-span-2">
+    <label className="text-sm font-bold text-slate-700 ml-1">
+      Archivo de identificación oficial
+    </label>
+
+    <label className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-2 border-dashed border-[#5ba4c7]/40 rounded-2xl cursor-pointer hover:bg-[#e9f8fb] hover:border-[#5ba4c7] transition-all">
+      <div className="w-10 h-10 rounded-xl bg-[#5ba4c7]/10 text-[#5ba4c7] flex items-center justify-center shrink-0">
+        <Upload size={20} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-slate-800">
+          Cargar identificación
+        </p>
+        <p className="text-xs text-slate-500 font-medium">
+          PDF, PNG, JPG o JPEG
+        </p>
+      </div>
+
+      <input
+        type="file"
+        accept="application/pdf,image/png,image/jpeg,image/jpg"
+        onChange={handleIdentificacionFileUpload}
+        className="hidden"
+      />
+    </label>
+
+    {archivoIdentificacion && (
+      <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-[#5ba4c7]/10 text-[#5ba4c7] flex items-center justify-center shrink-0">
+            {archivoIdentificacion.tipo === 'application/pdf' ? (
+              <FileText size={20} />
+            ) : (
+              <ImageIcon size={20} />
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-800 truncate">
+              {archivoIdentificacion.nombre}
+            </p>
+            <p className="text-xs text-slate-500 font-medium">
+              {archivoIdentificacion.tipo === 'application/pdf'
+                ? 'Documento PDF'
+                : 'Imagen'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRemoveIdentificacionFile}
+          className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+          title="Quitar archivo"
+        >
+          <X size={18} />
+        </button>
+      </div>
+    )}
+  </div>
+
+  <div className="space-y-2 col-span-2">
+    <label className="text-sm font-bold text-slate-700 ml-1">
+      Correo electrónico
+    </label>
+
+    <input
+      type="email"
+      placeholder="correo@ejemplo.com"
+      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#5ba4c7]/10 focus:border-[#5ba4c7] transition-all placeholder:text-slate-400"
+      value={correo}
+      onChange={(e) => setCorreo(e.target.value)}
+    />
+  </div>
+</div>
 
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 ml-1">Dirección</label>
@@ -500,100 +648,260 @@ const Beneficiarios: React.FC<BeneficiariosProps> = ({ onLogout, onNavigate }) =
         </div>
       )}
 
-      {/* Modal Detalle */}
-      {selectedBeneficiary && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
-            onClick={() => setSelectedBeneficiary(null)}
-          ></div>
+     {/* Modal Detalle */}
+{/* Modal Detalle */}
+{selectedBeneficiary && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-sm p-6">
+    <div
+      className="absolute inset-0"
+      onClick={() => setSelectedBeneficiary(null)}
+    ></div>
 
-          <div className="relative bg-white w-full max-w-3xl rounded-[32px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">Detalle del Beneficiario</h3>
-              <button
-                onClick={() => setSelectedBeneficiary(null)}
-                className="p-2 rounded-xl hover:bg-slate-100 transition-colors"
-              >
-                <X size={20} className="text-slate-500" />
-              </button>
-            </div>
+    <div className="relative bg-white w-full max-w-6xl h-[86vh] rounded-[34px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
+      
+      {/* Header */}
+      <div className="shrink-0 px-8 py-6 border-b border-[#9bd8ea]/50 flex items-center justify-between bg-[#effcff]">
+        <div>
+          <h3 className="text-2xl font-black text-slate-900">
+            Detalle del Beneficiario
+          </h3>
+          <p className="text-sm text-slate-600 font-medium mt-1">
+            Información general, identificación oficial e historial de préstamos
+          </p>
+        </div>
 
-            <div className="p-8 space-y-8">
+        <button
+          onClick={() => setSelectedBeneficiary(null)}
+          className="w-11 h-11 rounded-2xl bg-white border border-slate-100 text-slate-500 hover:text-[#5ba4c7] hover:border-[#5ba4c7]/40 hover:bg-[#f8fdfe] transition-all flex items-center justify-center shadow-sm"
+          title="Cerrar"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      {/* Contenido */}
+      <div className="flex-1 min-h-0 overflow-hidden p-7 bg-[#f8fdfe]">
+        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-7 h-full min-h-0">
+          
+          {/* Columna izquierda */}
+          <div className="space-y-6 overflow-y-auto pr-2">
+            
+            {/* Tarjeta del beneficiario */}
+            <div className="bg-white border border-[#9bd8ea]/70 rounded-[30px] p-6 shadow-md shadow-[#5ba4c7]/10">
               <div className="flex items-start gap-4">
-                <div className="w-16 h-16 rounded-full bg-[#5ba4c7]/10 flex items-center justify-center text-[#5ba4c7] font-bold text-lg">
+                <div className="w-20 h-20 rounded-full bg-[#5ba4c7]/15 flex items-center justify-center text-[#5ba4c7] font-black text-xl shrink-0">
                   {selectedBeneficiary.nombre_completo
                     ? selectedBeneficiary.nombre_completo.split(' ').map((n) => n[0]).slice(0, 2).join('')
                     : 'N/A'}
                 </div>
 
-                <div>
-                  <h4 className="text-2xl font-bold text-slate-900">{selectedBeneficiary.nombre_completo}</h4>
-                  <p className="text-slate-500 text-sm mt-1">Identificación: {selectedBeneficiary.identificacion}</p>
-                  <p className="text-slate-500 text-sm mt-1">Correo: {selectedBeneficiary.correo || 'N/A'}</p>
-                  
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
-                      <Phone size={16} className="text-[#5ba4c7]" />
-                      <span>{selectedBeneficiary.telefono || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-slate-500 text-sm font-medium">
-                      <MapPin size={16} className="text-[#5ba4c7] mt-0.5" />
-                      <span>{selectedBeneficiary.direccion || 'N/A'}</span>
-                    </div>
-                  </div>
+                <div className="min-w-0 pt-1">
+                  <h4 className="text-2xl font-black text-slate-900 leading-tight">
+                    {selectedBeneficiary.nombre_completo}
+                  </h4>
+
+                  <p className="text-xs text-slate-500 font-bold mt-2 break-all">
+                    ID: {selectedBeneficiary.identificacion}
+                  </p>
                 </div>
               </div>
 
-              <div>
-                <h5 className="text-lg font-bold text-slate-900 mb-4">Información de Registro</h5>
-
-                <div className="space-y-3">
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                    <p className="text-sm font-medium text-slate-600">
-                      Fecha de alta: <span className="font-bold text-slate-900">{new Date(selectedBeneficiary.fecha_registro).toLocaleString('es-MX')}</span>
-                    </p>
+              <div className="mt-6 space-y-4">
+                <div className="flex items-center gap-3 text-slate-700 text-sm font-bold">
+                  <div className="w-9 h-9 rounded-xl bg-[#5ba4c7]/10 flex items-center justify-center">
+                    <Phone size={17} className="text-[#5ba4c7]" />
                   </div>
+                  <span>{selectedBeneficiary.telefono || 'N/A'}</span>
                 </div>
-              </div>
 
-              <div>
-                <h5 className="text-lg font-bold text-slate-900 mb-4">Historial de Préstamos</h5>
-                <div className="space-y-3">
-                  {(() => {
-                    const historial = prestamosData.filter(p => p.id_beneficiario === selectedBeneficiary.id_beneficiario);
-                    if (historial.length === 0) {
-                      return <p className="text-sm text-slate-500 font-medium">No tiene préstamos registrados.</p>;
-                    }
-                    return historial.map((prestamo, index) => (
-                      <div key={index} className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-slate-900">{prestamo.nombre_articulo}</span>
-                          <span className={`text-xs font-black uppercase tracking-wider ${prestamo.estado_prestamo === 'Activo' ? 'text-[#94d6c6]' : 'text-slate-500'}`}>
-                            {prestamo.estado_prestamo}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 font-medium">
-                          Préstamo: {new Date(prestamo.fecha_prestamo).toLocaleDateString('es-MX')} - Devolución: {new Date(prestamo.fecha_limite_devolucion).toLocaleDateString('es-MX')}
-                        </p>
-                      </div>
-                    ));
-                  })()}
+                <div className="flex items-start gap-3 text-slate-700 text-sm font-bold">
+                  <div className="w-9 h-9 rounded-xl bg-[#5ba4c7]/10 flex items-center justify-center shrink-0">
+                    <MapPin size={17} className="text-[#5ba4c7]" />
+                  </div>
+                  <span className="leading-relaxed">{selectedBeneficiary.direccion || 'N/A'}</span>
+                </div>
+
+                <div className="bg-[#f1fbfe] border border-[#9bd8ea]/60 rounded-2xl p-4">
+                  <p className="text-xs font-black uppercase tracking-wider text-[#5ba4c7] mb-2">
+                    Correo electrónico
+                  </p>
+                  <p className="text-sm font-bold text-slate-800 break-all">
+                    {selectedBeneficiary.correo || 'N/A'}
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={() => setSelectedBeneficiary(null)}
-                className="px-8 py-3 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-2xl transition-all"
+            {/* Identificación oficial */}
+            <div className="bg-white border border-[#9bd8ea]/70 rounded-[30px] p-6 shadow-md shadow-[#5ba4c7]/10">
+              <div className="flex items-center justify-between mb-5">
+                <h5 className="text-xl font-black text-slate-900">
+                  Identificación Oficial
+                </h5>
+              </div>
+
+              <div className="bg-[#f1fbfe] border border-[#9bd8ea]/70 rounded-3xl h-60 flex items-center justify-center overflow-hidden mb-5">
+                {getIdentificacionTipo(selectedBeneficiary) === 'application/pdf' ? (
+                  <div className="flex flex-col items-center justify-center text-[#5ba4c7] gap-3">
+                    <FileText size={58} />
+                    <span className="text-sm font-black text-slate-500">
+                      Vista previa PDF
+                    </span>
+                  </div>
+                ) : (
+                  <img
+                    src={getIdentificacionPreview(selectedBeneficiary)}
+                    alt="Vista previa de identificación oficial"
+                    className="w-full h-full object-contain p-4"
+                  />
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 bg-[#f8fdfe] border border-[#9bd8ea]/60 rounded-2xl p-4 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-[#5ba4c7]/10 text-[#5ba4c7] flex items-center justify-center shrink-0">
+                  {getIdentificacionTipo(selectedBeneficiary) === 'application/pdf' ? (
+                    <FileText size={24} />
+                  ) : (
+                    <ImageIcon size={24} />
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-slate-900 truncate">
+                    {getIdentificacionNombre(selectedBeneficiary)}
+                  </p>
+                  <p className="text-xs text-slate-500 font-bold mt-0.5">
+                    {getIdentificacionTipo(selectedBeneficiary) === 'application/pdf'
+                      ? 'Documento PDF'
+                      : 'Imagen de identificación'}
+                  </p>
+                </div>
+              </div>
+
+              {!selectedBeneficiary.identificacion_archivo_url && (
+                <p className="text-xs text-slate-500 font-medium mb-4 leading-relaxed">
+                  Vista previa temporal usando el logotipo del sistema. Después se reemplazará por el archivo real desde la base de datos.
+                </p>
+              )}
+
+              <a
+                href={getIdentificacionPreview(selectedBeneficiary)}
+                download={getIdentificacionNombre(selectedBeneficiary)}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-[#5ba4c7] hover:bg-[#4a8ba9] text-white text-sm font-black shadow-lg shadow-[#5ba4c7]/30 transition-all active:scale-[0.98]"
               >
-                Cerrar
-              </button>
+                <Download size={19} />
+                Descargar identificación
+              </a>
+            </div>
+          </div>
+
+          {/* Columna derecha */}
+          <div className="space-y-6 min-h-0 overflow-hidden">
+            
+            {/* Información de registro */}
+            <div className="bg-white border border-[#9bd8ea]/70 rounded-[30px] p-6 shadow-md shadow-[#5ba4c7]/10">
+              <h5 className="text-xl font-black text-slate-900 mb-5">
+                Información de Registro
+              </h5>
+
+              <div className="bg-[#f1fbfe] border border-[#9bd8ea]/60 rounded-2xl p-5">
+                <p className="text-sm font-bold text-slate-600">
+                  Fecha de alta:
+                  <span className="font-black text-slate-900 ml-1">
+                    {new Date(selectedBeneficiary.fecha_registro).toLocaleString('es-MX')}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* Historial de préstamos */}
+            <div className="bg-white border border-[#9bd8ea]/70 rounded-[30px] p-6 shadow-md shadow-[#5ba4c7]/10">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h5 className="text-xl font-black text-slate-900">
+                    Historial de Préstamos
+                  </h5>
+                  <p className="text-xs text-slate-500 font-bold mt-1">
+                    Se muestran hasta 3 registros visibles; el resto queda en desplazamiento interno.
+                  </p>
+                </div>
+
+                <span className="px-3 py-1.5 rounded-full bg-[#5ba4c7]/10 text-[#5ba4c7] text-xs font-black">
+                  {
+                    prestamosData.filter(
+                      p => p.id_beneficiario === selectedBeneficiary.id_beneficiario
+                    ).length
+                  } registros
+                </span>
+              </div>
+
+              <div className="max-h-[315px] overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-[#9bd8ea] scrollbar-track-transparent">
+                {(() => {
+                  const historial = prestamosData.filter(
+                    p => p.id_beneficiario === selectedBeneficiary.id_beneficiario
+                  );
+
+                  if (historial.length === 0) {
+                    return (
+                      <div className="bg-[#f1fbfe] border border-[#9bd8ea]/60 rounded-2xl p-8 text-center">
+                        <p className="text-sm text-slate-500 font-bold">
+                          No tiene préstamos registrados.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return historial.map((prestamo, index) => (
+                    <div
+                      key={index}
+                      className="bg-[#f1fbfe] border border-[#9bd8ea]/60 rounded-2xl p-5 hover:border-[#5ba4c7] hover:bg-white transition-all"
+                    >
+                      <div className="flex items-center justify-between gap-4 mb-3">
+                        <span className="font-black text-slate-900 text-base">
+                          {prestamo.nombre_articulo}
+                        </span>
+
+                        <span
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            prestamo.estado_prestamo === 'Activo'
+                              ? 'bg-[#94d6c6]/30 text-[#21a78a]'
+                              : 'bg-[#9bd8ea]/50 text-[#0f6f8b]'
+                          }`}
+                        >
+                          {prestamo.estado_prestamo}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="bg-white/80 rounded-xl px-3 py-2 border border-white">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Préstamo
+                          </p>
+                          <p className="text-xs font-bold text-slate-700 mt-0.5">
+                            {new Date(prestamo.fecha_prestamo).toLocaleDateString('es-MX')}
+                          </p>
+                        </div>
+
+                        <div className="bg-white/80 rounded-xl px-3 py-2 border border-white">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Devolución
+                          </p>
+                          <p className="text-xs font-bold text-slate-700 mt-0.5">
+                            {new Date(prestamo.fecha_limite_devolucion).toLocaleDateString('es-MX')}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };
